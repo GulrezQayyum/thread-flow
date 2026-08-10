@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import '../../../providers/auth_provider.dart';
- 
+
 class LoginScreen extends HookConsumerWidget {
   const LoginScreen({Key? key}) : super(key: key);
- 
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final emailController = useTextEditingController();
     final passwordController = useTextEditingController();
     final isLoading = useState(false);
     final errorMessage = useState<String?>(null);
- 
- 
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -110,54 +109,50 @@ class LoginScreen extends HookConsumerWidget {
                 ),
               if (errorMessage.value != null) const SizedBox(height: 16),
               // Sign In Button
+              // Sign In Button
               ElevatedButton(
                 onPressed: isLoading.value
                     ? null
                     : () async {
-                  errorMessage.value = null;
-                  if (emailController.text.isEmpty ||
-                      passwordController.text.isEmpty) {
-                    errorMessage.value =
-                        'Please fill in all fields';
-                    return;
-                  }
- 
-                  isLoading.value = true;
-                  try {
-                    // Trigger sign in
-                    final result = await ref.read(
-                      signInProvider(
-                        SignInParams(
-                          email: emailController.text.trim(),
-                          password: passwordController.text,
-                        ),
-                      ).future,
-                    );
- 
-                    if (result != null && context.mounted) {
-                      // Navigate to home (handled by main.dart routing)
-                      Navigator.of(context).pushNamedAndRemoveUntil(
-                        '/home',
-                        (route) => false,
-                      );
-                    }
-                  } catch (e) {
-                    errorMessage.value = e.toString().replaceFirst(
-                      'Exception: ',
-                      '',
-                    );
-                  } finally {
-                    isLoading.value = false;
-                  }
-                },
+                        errorMessage.value = null;
+                        if (emailController.text.isEmpty ||
+                            passwordController.text.isEmpty) {
+                          errorMessage.value = 'Please fill in all fields';
+                          return;
+                        }
+
+                        isLoading.value = true;
+                        try {
+                          // Trigger sign in via the new AuthController
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .signIn(
+                                email: emailController.text.trim(),
+                                password: passwordController.text,
+                              );
+
+                          if (context.mounted) {
+                            // Navigate to home (handled by main.dart routing)
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/home',
+                              (route) => false,
+                            );
+                          }
+                        } catch (e) {
+                          errorMessage.value = e.toString().replaceFirst(
+                            'Exception: ',
+                            '',
+                          );
+                        } finally {
+                          isLoading.value = false;
+                        }
+                      },
                 child: isLoading.value
                     ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
-                )
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Sign In'),
               ),
               const SizedBox(height: 16),

@@ -5,7 +5,7 @@ import '../../../providers/auth_provider.dart';
 
 class SignUpScreen extends HookConsumerWidget {
   const SignUpScreen({Key? key}) : super(key: key);
- 
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final nameController = useTextEditingController();
@@ -14,7 +14,7 @@ class SignUpScreen extends HookConsumerWidget {
     final confirmPasswordController = useTextEditingController();
     final isLoading = useState(false);
     final errorMessage = useState<String?>(null);
- 
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create Account'),
@@ -114,64 +114,60 @@ class SignUpScreen extends HookConsumerWidget {
                 onPressed: isLoading.value
                     ? null
                     : () async {
-                  errorMessage.value = null;
- 
-                  // Validation
-                  if (nameController.text.isEmpty) {
-                    errorMessage.value = 'Please enter your name';
-                    return;
-                  }
-                  if (emailController.text.isEmpty) {
-                    errorMessage.value = 'Please enter your email';
-                    return;
-                  }
-                  if (passwordController.text.length < 6) {
-                    errorMessage.value =
-                        'Password must be at least 6 characters';
-                    return;
-                  }
-                  if (passwordController.text !=
-                      confirmPasswordController.text) {
-                    errorMessage.value = 'Passwords do not match';
-                    return;
-                  }
- 
-                  isLoading.value = true;
-                  try {
-                    // Trigger sign up
-                    final result = await ref.read(
-                      signUpProvider(
-                        SignUpParams(
-                          email: emailController.text.trim(),
-                          password: passwordController.text,
-                          displayName: nameController.text,
-                        ),
-                      ).future,
-                    );
- 
-                    if (result != null && context.mounted) {
-                      Navigator.of(context).pushNamedAndRemoveUntil(
-                        '/home',
-                        (route) => false,
-                      );
-                    }
-                  } catch (e) {
-                    errorMessage.value = e.toString().replaceFirst(
-                      'Exception: ',
-                      '',
-                    );
-                  } finally {
-                    isLoading.value = false;
-                  }
-                },
+                        errorMessage.value = null;
+
+                        // Validation
+                        if (nameController.text.isEmpty) {
+                          errorMessage.value = 'Please enter your name';
+                          return;
+                        }
+                        if (emailController.text.isEmpty) {
+                          errorMessage.value = 'Please enter your email';
+                          return;
+                        }
+                        if (passwordController.text.length < 6) {
+                          errorMessage.value =
+                              'Password must be at least 6 characters';
+                          return;
+                        }
+                        if (passwordController.text !=
+                            confirmPasswordController.text) {
+                          errorMessage.value = 'Passwords do not match';
+                          return;
+                        }
+
+                        isLoading.value = true;
+                        try {
+                          // Trigger sign up via the new AuthController
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .signUp(
+                                email: emailController.text.trim(),
+                                password: passwordController.text,
+                                displayName: nameController.text.trim(),
+                              );
+
+                          if (context.mounted) {
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/home',
+                              (route) => false,
+                            );
+                          }
+                        } catch (e) {
+                          errorMessage.value = e.toString().replaceFirst(
+                            'Exception: ',
+                            '',
+                          );
+                        } finally {
+                          isLoading.value = false;
+                        }
+                      },
                 child: isLoading.value
                     ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
-                )
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Create Account'),
               ),
               const SizedBox(height: 16),

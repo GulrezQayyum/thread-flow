@@ -28,29 +28,57 @@ final currentUserStreamProvider = StreamProvider<UserModel?>((ref) {
   return authService.watchUser(user.uid);
 });
 
-// Sign up provider
-final signUpProvider = FutureProvider.family<UserModel?, SignUpParams>((ref, params) async {
-  final authService = ref.watch(authServiceProvider);
-  return authService.signUp(
-    email: params.email,
-    password: params.password,
-    displayName: params.displayName,
-  );
-});
+// --- Modern AsyncNotifier for Auth Actions ---
 
-// Sign in provider
-final signInProvider = FutureProvider.family<UserModel?, SignInParams>((ref, params) async {
-  final authService = ref.watch(authServiceProvider);
-  return authService.signIn(
-    email: params.email,
-    password: params.password,
-  );
-});
+class AuthController extends AsyncNotifier<void> {
+  @override
+  Future<void> build() async {
+    // Initial state is data with no loading/error
+    return;
+  }
 
-// Sign out provider
-final signOutProvider = FutureProvider<void>((ref) async {
-  final authService = ref.watch(authServiceProvider);
-  return authService.signOut();
+  Future<void> signUp({
+    required String email,
+    required String password,
+    required String displayName,
+  }) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final authService = ref.read(authServiceProvider);
+      await authService.signUp(
+        email: email,
+        password: password,
+        displayName: displayName,
+      );
+    });
+  }
+
+  Future<void> signIn({
+    required String email,
+    required String password,
+  }) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final authService = ref.read(authServiceProvider);
+      await authService.signIn(
+        email: email,
+        password: password,
+      );
+    });
+  }
+
+  Future<void> signOut() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final authService = ref.read(authServiceProvider);
+      await authService.signOut();
+    });
+  }
+}
+
+// Auth Controller Provider
+final authControllerProvider = AsyncNotifierProvider<AuthController, void>(() {
+  return AuthController();
 });
 
 // Update profile provider
@@ -60,33 +88,10 @@ final updateProfileProvider = FutureProvider.family<void, UpdateProfileParams>((
     displayName: params.displayName,
     photoURL: params.photoURL,
   );
-  // Refresh current user
   ref.invalidate(currentUserStreamProvider);
 });
 
 // Parameter classes
-class SignUpParams {
-  final String email;
-  final String password;
-  final String displayName;
-
-  SignUpParams({
-    required this.email,
-    required this.password,
-    required this.displayName,
-  });
-}
-
-class SignInParams {
-  final String email;
-  final String password;
-
-  SignInParams({
-    required this.email,
-    required this.password,
-  });
-}
-
 class UpdateProfileParams {
   final String displayName;
   final String? photoURL;
