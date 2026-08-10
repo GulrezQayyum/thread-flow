@@ -1,6 +1,8 @@
+// lib/ui/screens/home_screen.dart (UPDATED FOR DAY 3)
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import '../widgets/chat_list.dart'; 
+import '../widgets/chat_list.dart';
+import '../widgets/create_chat_dialog.dart';
 import '../../providers/auth_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -13,17 +15,22 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('ThreadFlow'),
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              // TODO: Implement search
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Search coming soon')),
+              );
             },
           ),
           IconButton(
             icon: const Icon(Icons.person_outlined),
             onPressed: () {
-              // TODO: Navigate to profile
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Profile coming soon')),
+              );
             },
           ),
           PopupMenuButton(
@@ -31,13 +38,43 @@ class HomeScreen extends ConsumerWidget {
               PopupMenuItem(
                 child: const Text('Settings'),
                 onTap: () {
-                  // TODO: Navigate to settings
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Settings coming soon')),
+                  );
                 },
               ),
               PopupMenuItem(
                 child: const Text('Sign Out'),
                 onTap: () async {
-                  ref.read(authServiceProvider).signOut();
+                  // Show confirmation dialog
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Sign Out'),
+                      content: const Text('Are you sure you want to sign out?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            try {
+                              ref.read(authServiceProvider).signOut();
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                              }
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: $e')),
+                              );
+                            }
+                          },
+                          child: const Text('Sign Out'),
+                        ),
+                      ],
+                    ),
+                  );
                 },
               ),
             ],
@@ -58,7 +95,10 @@ class HomeScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // TODO: Create new chat dialog
+          showDialog(
+            context: context,
+            builder: (context) => const CreateChatDialog(),
+          );
         },
         icon: const Icon(Icons.add),
         label: const Text('New Chat'),
