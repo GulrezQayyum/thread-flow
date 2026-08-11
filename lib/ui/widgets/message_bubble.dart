@@ -1,8 +1,10 @@
 // lib/widgets/message_bubble.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../models/message_model.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/storage_provider.dart';
 import 'reaction_picker.dart';
 
 class MessageBubble extends ConsumerWidget {
@@ -84,9 +86,12 @@ class MessageBubble extends ConsumerWidget {
             ),
           
           // Message bubble
-          GestureDetector(
+          InkWell(
             onTap: onThreadTap,
-            onLongPress: () => _showMessageOptions(context),
+            onLongPress: () {
+              _showMessageOptions(context);
+            },
+            borderRadius: BorderRadius.circular(16),
             child: Container(
               margin: EdgeInsets.only(
                 left: isCurrentUser ? 60 : 8,
@@ -94,7 +99,7 @@ class MessageBubble extends ConsumerWidget {
                 top: 2,
                 bottom: 2,
               ),
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: isCurrentUser
                     ? Theme.of(context).colorScheme.primary
@@ -112,39 +117,8 @@ class MessageBubble extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Media (image)
-                  if (message.mediaUrl != null) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        message.mediaUrl!,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            height: 200,
-                            width: 200,
-                            color: Colors.grey[300],
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                              ),
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            height: 150,
-                            width: 200,
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.broken_image, size: 50),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                  if (message.mediaUrl != null)
+                    _buildImageContent(context, ref),
                   
                   // Text
                   if (message.text.isNotEmpty && message.text != '📷 Image')
@@ -156,8 +130,11 @@ class MessageBubble extends ConsumerWidget {
                       ),
                     ),
                   
-                  // Timestamp and reactions
                   const SizedBox(height: 4),
+                  
+                  // ==================== TIMESTAMP & REACTIONS ====================
+                  
+                  // Timestamp row with reaction button
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -178,18 +155,84 @@ class MessageBubble extends ConsumerWidget {
                           color: Colors.white.withOpacity(0.7),
                         ),
                       ],
-                      if (message.reactions.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        ...message.reactions.map((reaction) => Padding(
-                          padding: const EdgeInsets.only(right: 2),
-                          child: Text(
-                            reaction,
-                            style: const TextStyle(fontSize: 12),
+                      // Reaction button (like WhatsApp)
+                      const SizedBox(width: 4),
+                      InkWell(
+                        onTap: () => _showReactionPicker(context),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.add_reaction,
+                            size: 14,
+                            color: isCurrentUser 
+                                ? Colors.white.withOpacity(0.6) 
+                                : Colors.grey[500],
                           ),
-                        )),
-                      ],
+                        ),
+                      ),
                     ],
                   ),
+                  
+                  // ==================== REACTIONS DISPLAY (Like WhatsApp) ====================
+                  
+                  if (message.reactions.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: _groupReactions(message.reactions).entries.map((entry) {
+                        final emoji = entry.key;
+                        final count = entry.value;
+                        return InkWell(
+                          onTap: () {
+                            onReactionTap?.call(emoji);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isCurrentUser 
+                                  ? Colors.white.withOpacity(0.15) 
+                                  : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isCurrentUser 
+                                    ? Colors.white.withOpacity(0.3) 
+                                    : Colors.grey[300]!,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  emoji,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                if (count > 1) ...[
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    count.toString(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isCurrentUser 
+                                          ? Colors.white.withOpacity(0.8) 
+                                          : Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -198,6 +241,130 @@ class MessageBubble extends ConsumerWidget {
       ),
     );
   }
+
+  // ==================== HELPER: GROUP REACTIONS ====================
+  
+  Map<String, int> _groupReactions(List<String> reactions) {
+    final Map<String, int> grouped = {};
+    for (var reaction in reactions) {
+      grouped[reaction] = (grouped[reaction] ?? 0) + 1;
+    }
+    return grouped;
+  }
+
+  // ==================== IMAGE CONTENT ====================
+
+  Widget _buildImageContent(BuildContext context, WidgetRef ref) {
+    final mediaUrl = message.mediaUrl!;
+    
+    if (mediaUrl.startsWith('firestore://')) {
+      return _buildFirestoreImage(context, ref);
+    } else {
+      return _buildNetworkImage(mediaUrl);
+    }
+  }
+
+  Widget _buildFirestoreImage(BuildContext context, WidgetRef ref) {
+    try {
+      final parts = message.mediaUrl!.replaceFirst('firestore://', '').split('/');
+      if (parts.length < 3) {
+        return _buildImagePlaceholder();
+      }
+      
+      final chatId = parts[0];
+      final messageId = parts[2];
+      
+      final imageDataAsync = ref.watch(
+        getImageProvider(
+          GetImageParams(chatId: chatId, messageId: messageId),
+        )
+      );
+      
+      return imageDataAsync.when(
+        data: (base64Data) {
+          if (base64Data != null) {
+            try {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  base64Decode(base64Data),
+                  height: 200,
+                  width: 200,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildImagePlaceholder();
+                  },
+                ),
+              );
+            } catch (e) {
+              return _buildImagePlaceholder();
+            }
+          }
+          return _buildImagePlaceholder();
+        },
+        loading: () => Container(
+          height: 200,
+          width: 200,
+          color: Colors.grey[200],
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+        error: (error, stack) => _buildImagePlaceholder(),
+      );
+    } catch (e) {
+      return _buildImagePlaceholder();
+    }
+  }
+
+  Widget _buildNetworkImage(String url) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        url,
+        height: 200,
+        width: 200,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 200,
+            width: 200,
+            color: Colors.grey[200],
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return _buildImagePlaceholder();
+        },
+      ),
+    );
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Container(
+      height: 150,
+      width: 200,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.broken_image,
+        size: 50,
+        color: Colors.grey,
+      ),
+    );
+  }
+
+  // ==================== HELPERS ====================
 
   String _formatTime(DateTime timestamp) {
     final now = DateTime.now();
@@ -216,47 +383,59 @@ class MessageBubble extends ConsumerWidget {
     }
   }
 
+  // ==================== MESSAGE OPTIONS ====================
+
   void _showMessageOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.add_reaction),
-              title: const Text('Add Reaction'),
-              onTap: () {
-                Navigator.pop(context);
-                _showReactionPicker(context);
-              },
-            ),
-            if (isCurrentUser) ...[
+      builder: (context) => SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            children: [
+              // Reaction option
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Delete Message', style: TextStyle(color: Colors.red)),
+                leading: const Icon(Icons.emoji_emotions, color: Colors.orange),
+                title: const Text('Add Reaction'),
                 onTap: () {
                   Navigator.pop(context);
-                  onDeleteTap?.call();
+                  _showReactionPicker(context);
                 },
               ),
+              // Thread option
+              ListTile(
+                leading: const Icon(Icons.forum_outlined, color: Colors.blue),
+                title: const Text('View Thread'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onThreadTap?.call();
+                },
+              ),
+              // Delete option (only for own messages)
+              if (isCurrentUser) ...[
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: const Text(
+                    'Delete Message',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onDeleteTap?.call();
+                  },
+                ),
+              ],
             ],
-            ListTile(
-              leading: const Icon(Icons.forum_outlined),
-              title: const Text('View Thread'),
-              onTap: () {
-                Navigator.pop(context);
-                onThreadTap?.call();
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+
+  // ==================== REACTION PICKER ====================
 
   void _showReactionPicker(BuildContext context) {
     showModalBottomSheet(

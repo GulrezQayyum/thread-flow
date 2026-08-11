@@ -1,6 +1,8 @@
+// lib/services/storage_service.dart
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -17,9 +19,11 @@ class StorageService {
       );
       
       if (image == null) return null;
+      print('📷 Image picked from gallery: ${image.path}');
       return File(image.path);
     } catch (e) {
-      throw Exception('Failed to pick image: $e');
+      print('❌ Failed to pick image: $e');
+      return null;
     }
   }
 
@@ -34,9 +38,11 @@ class StorageService {
       );
       
       if (image == null) return null;
+      print('📷 Image picked from camera: ${image.path}');
       return File(image.path);
     } catch (e) {
-      throw Exception('Failed to pick image from camera: $e');
+      print('❌ Failed to pick image from camera: $e');
+      return null;
     }
   }
 
@@ -50,12 +56,21 @@ class StorageService {
       final fileName = 'chats/$chatId/images/${messageId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final ref = _storage.ref(fileName);
       
-      // Upload file
-      await ref.putFile(imageFile);
+      print('📤 Uploading image to: $fileName');
+      
+      // Upload file with progress tracking
+      final uploadTask = ref.putFile(imageFile);
+      
+      // Wait for upload to complete
+      await uploadTask;
       
       // Get download URL
-      return await ref.getDownloadURL();
+      final downloadUrl = await ref.getDownloadURL();
+      print('✅ Image uploaded: $downloadUrl');
+      
+      return downloadUrl;
     } catch (e) {
+      print('❌ Failed to upload image: $e');
       throw Exception('Failed to upload image: $e');
     }
   }

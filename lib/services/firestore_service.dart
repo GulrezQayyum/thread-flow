@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_model.dart';
@@ -77,18 +79,16 @@ class FirestoreService {
 
   /// Watch all chats for a user (real-time)
   Stream<List<ChatModel>> watchUserChats(String userId) {
-  return _firestore
-      .collection('chats')
-      .where('members', arrayContains: userId)
-      // .orderBy('lastMessageAt', descending: true)  // ← Commented out
-      .snapshots()
-      .map((snapshot) {
-    return snapshot.docs
-        .map((doc) => ChatModel.fromJson(doc.data()))
-        .toList();
-  });
-}
-
+    return _firestore
+        .collection('chats')
+        .where('members', arrayContains: userId)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => ChatModel.fromJson(doc.data()))
+              .toList();
+        });
+  }
 
   /// Update chat last message
   Future<void> updateChatLastMessage({
@@ -156,7 +156,6 @@ class FirestoreService {
 
       print('📝 SAVING MESSAGE: ${message.toJson()}');
 
-      // Save message to Firestore
       await _firestore
           .collection('chats')
           .doc(chatId)
@@ -166,7 +165,6 @@ class FirestoreService {
 
       print('✅ MESSAGE SAVED TO FIRESTORE');
 
-      // Update chat's last message
       await _firestore.collection('chats').doc(chatId).update({
         'lastMessageAt': FieldValue.serverTimestamp(),
         'lastMessage': text.length > 50 ? '${text.substring(0, 50)}...' : text,
@@ -275,6 +273,24 @@ class FirestoreService {
     }
   }
 
+  /// Get a single chat message
+  Future<Map<String, dynamic>?> getChatMessage(String chatId, String messageId) async {
+    try {
+      final doc = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(messageId)
+          .get();
+      
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (e) {
+      print('❌ Failed to get message: $e');
+      return null;
+    }
+  }
+
   /// Add reaction to a message
   Future<void> addReaction({
     required String chatId,
@@ -320,10 +336,7 @@ class FirestoreService {
   /// Update thread message count
   Future<void> _updateThreadMessageCount(String chatId, String threadId) async {
     try {
-      // Get all messages in thread
       final messages = await getThreadMessages(chatId, threadId);
-
-      // Update thread document or create if doesn't exist
       final threadRef = _firestore
           .collection('chats')
           .doc(chatId)
@@ -338,7 +351,6 @@ class FirestoreService {
           'lastMessageAt': FieldValue.serverTimestamp(),
         });
       } else if (messages.isNotEmpty) {
-        // Create thread document
         final firstMessage = messages.first;
         await threadRef.set({
           'threadId': threadId,
@@ -350,7 +362,6 @@ class FirestoreService {
         });
       }
     } catch (e) {
-      // Don't throw - this is a secondary operation
       print('Failed to update thread: $e');
     }
   }
@@ -515,8 +526,6 @@ class FirestoreService {
   /// Search users by display name
   Future<List<UserModel>> searchUsersByName(String name) async {
     try {
-      // Firestore doesn't support partial matches natively
-      // Using startAt/endAt for prefix matching
       final snapshot = await _firestore
           .collection('users')
           .where('displayName', isGreaterThanOrEqualTo: name)
@@ -559,19 +568,23 @@ class FirestoreService {
     try {
       final chatRef = _firestore.collection('chats').doc(chatId);
 
-      // Add user to chat members
       await chatRef.update({
         'members': FieldValue.arrayUnion([userId]),
       });
 
-      // Add chat to user's chat list
       await _firestore
           .collection('users')
           .doc(userId)
           .collection('chats')
           .doc(chatId)
-          .set({'chatId': chatId, 'addedAt': FieldValue.serverTimestamp()});
+          .set({
+            'chatId': chatId,
+            'addedAt': FieldValue.serverTimestamp(),
+          });
+
+      print('✅ User $userId added to chat $chatId');
     } catch (e) {
+      print('❌ Failed to add user to chat: $e');
       throw Exception('Failed to add user to chat: $e');
     }
   }
@@ -584,12 +597,10 @@ class FirestoreService {
     try {
       final chatRef = _firestore.collection('chats').doc(chatId);
 
-      // Remove user from chat members
       await chatRef.update({
         'members': FieldValue.arrayRemove([userId]),
       });
 
-      // Remove chat from user's chat list
       await _firestore
           .collection('users')
           .doc(userId)
@@ -601,12 +612,119 @@ class FirestoreService {
     }
   }
 
+  // ==================== IMAGE OPERATIONS ====================
+
+  /// Upload image to Firestore (base64 encoded with chunked processing)
+  Future<String> uploadChatImage({
+    required String chatId,
+    required String messageId,
+    required File imageFile,
+  }) async {
+    try {
+      final fileSize = await imageFile.length();
+      final sizeInMB = fileSize / (1024 * 1024);
+
+      if (sizeInMB > 0.9) {
+        throw Exception(
+          'Image too large: ${sizeInMB.toStringAsFixed(2)}MB. '
+          'Please use a smaller image (max 1MB)',
+        );
+      }
+
+      print('📤 Storing image: ${sizeInMB.toStringAsFixed(2)}MB');
+
+      List<int> bytes;
+      try {
+        bytes = await imageFile.readAsBytes();
+      } catch (e) {
+        throw Exception('Failed to read image file: $e');
+      }
+
+      String base64String;
+      try {
+        final chunks = <String>[];
+        const chunkSize = 8192;
+
+        for (var i = 0; i < bytes.length; i += chunkSize) {
+          final end = (i + chunkSize < bytes.length)
+              ? i + chunkSize
+              : bytes.length;
+          final chunk = bytes.sublist(i, end);
+          chunks.add(base64Encode(chunk));
+        }
+
+        base64String = chunks.join();
+        print('📤 Base64 encoding complete: ${base64String.length} characters');
+      } catch (e) {
+        throw Exception('Failed to encode image: $e');
+      }
+
+      try {
+        await _firestore
+            .collection('chats')
+            .doc(chatId)
+            .collection('images')
+            .doc(messageId)
+            .set({
+              'data': base64String,
+              'mimeType': 'image/jpeg',
+              'size': bytes.length,
+              'createdAt': FieldValue.serverTimestamp(),
+              'chatId': chatId,
+            });
+      } catch (e) {
+        throw Exception('Failed to save to Firestore: $e');
+      }
+
+      final imageRef = 'firestore://$chatId/images/$messageId';
+      print('✅ Image stored in Firestore: $imageRef');
+
+      return imageRef;
+    } catch (e) {
+      print('❌ Failed to store image: $e');
+      throw Exception('Failed to store image: $e');
+    }
+  }
+
+  /// Get image from Firestore by reference
+  Future<String?> getImageData(String chatId, String messageId) async {
+    try {
+      final doc = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('images')
+          .doc(messageId)
+          .get();
+
+      if (!doc.exists) return null;
+
+      final data = doc.data()!;
+      return data['data'] as String?;
+    } catch (e) {
+      print('❌ Failed to get image: $e');
+      return null;
+    }
+  }
+
+  /// Delete image from Firestore
+  Future<void> deleteImage(String chatId, String messageId) async {
+    try {
+      await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('images')
+          .doc(messageId)
+          .delete();
+    } catch (e) {
+      throw Exception('Failed to delete image: $e');
+    }
+  }
+
   // ==================== SEARCH OPERATIONS ====================
 
   /// Search messages in a chat
   Future<List<MessageModel>> searchMessages(String chatId, String query) async {
     try {
-      // Get all messages (limited to avoid performance issues)
       final snapshot = await _firestore
           .collection('chats')
           .doc(chatId)
@@ -663,7 +781,6 @@ class FirestoreService {
       }
       await batch.commit();
 
-      // Update chat
       await _firestore.collection('chats').doc(chatId).update({
         'lastMessageAt': null,
         'lastMessage': null,

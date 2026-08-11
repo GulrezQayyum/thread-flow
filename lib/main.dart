@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'config/firebase_config.dart';
@@ -8,20 +8,18 @@ import 'providers/auth_provider.dart';
 import 'ui/screens/auth/login_screen.dart';
 import 'ui/screens/auth/signup_screen.dart';
 import 'ui/screens/home_screen.dart';
+import 'ui/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables (.env file)
   try {
     await dotenv.load();
     print('✅ .env file loaded successfully');
   } catch (e) {
     print('⚠️ Warning: Could not load .env file: $e');
-    print('💡 Make sure .env exists in project root with GROQ_API_KEY');
   }
 
-  // Initialize Firebase with platform-specific options
   try {
     await FirebaseConfig.initialize();
     print('✅ Firebase initialized successfully');
@@ -33,13 +31,31 @@ void main() async {
   runApp(const ProviderScope(child: ThreadFlowApp()));
 }
 
-/// Main app widget with theme and routing
-class ThreadFlowApp extends ConsumerWidget {
-  const ThreadFlowApp({Key? key}) : super(key: key);
+class ThreadFlowApp extends ConsumerStatefulWidget {
+  const ThreadFlowApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Watch auth state - automatically rebuilds when auth changes
+  ConsumerState<ThreadFlowApp> createState() => _ThreadFlowAppState();
+}
+
+class _ThreadFlowAppState extends ConsumerState<ThreadFlowApp> {
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Show splash for minimum 3 seconds
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        setState(() {
+          _showSplash = false;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
     return MaterialApp(
@@ -49,36 +65,29 @@ class ThreadFlowApp extends ConsumerWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       
-      // Home screen that responds to auth state
-      home: authState.when(
-        // User is logged in
-        data: (user) {
-          if (user != null) {
-            return const HomeScreen();
-          } else {
-            // User not logged in - show login
-            return const LoginScreen();
-          }
-        },
-        
-        // Still checking auth state
-        loading: () => const _LoadingScreen(),
-        
-        // Error during auth check
-        error: (error, stackTrace) {
-          print('❌ Auth state error: $error');
-          return _ErrorScreen(error: error.toString());
-        },
-      ),
+      home: _showSplash
+          ? const SplashScreen()
+          : authState.when(
+              loading: () => const SplashScreen(),
+              data: (user) {
+                if (user != null) {
+                  return const HomeScreen();
+                } else {
+                  return const LoginScreen();
+                }
+              },
+              error: (error, stackTrace) {
+                print('❌ Auth state error: $error');
+                return _ErrorScreen(error: error.toString());
+              },
+            ),
       
-      // Named routes for navigation
       routes: {
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignUpScreen(),
         '/home': (context) => const HomeScreen(),
       },
       
-      // Handle unknown routes
       onUnknownRoute: (settings) {
         return MaterialPageRoute(
           builder: (context) => Scaffold(
@@ -87,58 +96,6 @@ class ThreadFlowApp extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// Loading screen shown while checking authentication state
-class _LoadingScreen extends StatelessWidget {
-  const _LoadingScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // App logo
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.chat_outlined,
-                size: 40,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Loading spinner
-            const CircularProgressIndicator(),
-            const SizedBox(height: 24),
-            
-            // App name
-            Text(
-              'ThreadFlow',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            
-            // Status text
-            Text(
-              'Initializing...',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -156,15 +113,12 @@ class _ErrorScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Error icon
             Icon(
               Icons.error_outline,
               size: 64,
               color: Theme.of(context).colorScheme.error,
             ),
             const SizedBox(height: 24),
-            
-            // Error title
             Text(
               'Initialization Error',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -172,8 +126,6 @@ class _ErrorScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            
-            // Error message
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(
@@ -183,8 +135,6 @@ class _ErrorScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            
-            // Help text
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Container(

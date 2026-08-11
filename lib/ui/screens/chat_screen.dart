@@ -1,4 +1,3 @@
-// lib/ui/screens/chat_screen.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -21,7 +20,7 @@ class ChatScreen extends HookConsumerWidget {
   final ChatModel chat;
 
   const ChatScreen({
-    super.key, // Use super.key (Dart 2.17+)
+    super.key,
     required this.chatId,
     required this.chat,
   });
@@ -38,7 +37,7 @@ class ChatScreen extends HookConsumerWidget {
     final searchQuery = useState<String?>(null);
     final isSearching = useState(false);
 
-    // Auto-scroll on new messages - FIX: hasData -> hasValue
+    // Auto-scroll on new messages
     useEffect(() {
       if (messagesAsync.hasValue && messagesAsync.value!.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,7 +61,6 @@ class ChatScreen extends HookConsumerWidget {
           Expanded(
             child: messagesAsync.when(
               data: (messages) {
-                // Filter messages by thread and search
                 var filteredMessages = messages;
 
                 if (selectedThreadId.value != null) {
@@ -226,26 +224,22 @@ class ChatScreen extends HookConsumerWidget {
       ),
       elevation: 1,
       actions: [
-        // Search Button
         IconButton(
           icon: const Icon(Icons.search),
           onPressed: () =>
               _toggleSearch(context, ref, isSearching, searchQuery),
           tooltip: 'Search Messages',
         ),
-        // Threads Button
         IconButton(
           icon: const Icon(Icons.forum_outlined),
           onPressed: () => _showThreadsSheet(context, ref, selectedThreadId),
           tooltip: 'Threads',
         ),
-        // Add Contact Button
         IconButton(
           icon: const Icon(Icons.person_add_alt_1),
           onPressed: () => _showAddContactDialog(context, ref),
           tooltip: 'Add Contact',
         ),
-        // Chat Info Button
         IconButton(
           icon: const Icon(Icons.info_outline),
           onPressed: () => _showChatInfo(context),
@@ -469,6 +463,8 @@ class ChatScreen extends HookConsumerWidget {
     }
   }
 
+  // ==================== IMAGE UPLOAD ====================
+
   Future<void> _uploadAndSendMedia(
     BuildContext context,
     WidgetRef ref,
@@ -481,14 +477,13 @@ class ChatScreen extends HookConsumerWidget {
 
     isUploadingMedia.value = true;
     try {
-      final threadId =
-          selectedThreadId.value ??
+      final threadId = selectedThreadId.value ?? 
           DateTime.now().millisecondsSinceEpoch.toString();
       final isNewThread = selectedThreadId.value == null;
 
       final messageId = DateTime.now().millisecondsSinceEpoch.toString();
 
-      final imageUrl = await ref.read(
+      final imageRef = await ref.read(
         uploadImageProvider(
           UploadImageParams(
             chatId: chatId,
@@ -504,7 +499,7 @@ class ChatScreen extends HookConsumerWidget {
             chatId: chatId,
             senderId: currentUser.uid,
             text: '📷 Image',
-            mediaUrl: imageUrl,
+            mediaUrl: imageRef,
             threadId: threadId,
             isThreadStart: isNewThread,
           ),
@@ -514,26 +509,78 @@ class ChatScreen extends HookConsumerWidget {
       if (isNewThread) {
         selectedThreadId.value = threadId;
       }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Image sent!'),
+          duration: Duration(seconds: 1),
+        ),
+      );
     } catch (e) {
-      _showErrorSnackBar(context, e.toString());
+      print('❌ Upload error: $e');
+      _showErrorSnackBar(context, 'Failed to send image: $e');
     } finally {
       isUploadingMedia.value = false;
     }
   }
+
+  // ==================== REACTION HANDLER ====================
 
   void _handleReaction(
     BuildContext context,
     WidgetRef ref,
     String messageId,
     String reaction,
-  ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Added reaction: $reaction'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+  ) async {
+    // Get current user - FIXED: Use currentUserAsync.value
+    final currentUser = ref.read(currentUserStreamProvider).value;
+    
+    if (currentUser == null) {
+      _showErrorSnackBar(context, 'Please login to add reactions');
+      return;
+    }
+
+    try {
+      // Toggle reaction using the provider
+      await ref.read(
+        toggleReactionProvider(
+          ToggleReactionParams(
+            chatId: chatId,
+            messageId: messageId,
+            userId: currentUser.uid,
+            reaction: reaction,
+          ),
+        ).future,
+      );
+      
+      // Show brief feedback (like WhatsApp)
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(reaction),
+              const SizedBox(width: 8),
+              const Text('added'),
+            ],
+          ),
+          duration: const Duration(milliseconds: 500),
+          backgroundColor: Colors.black.withOpacity(0.7),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      print('❌ Reaction error: $e');
+      _showErrorSnackBar(context, 'Failed to add reaction');
+    }
   }
+
+  // ==================== DELETE CONFIRMATION ====================
 
   void _showDeleteConfirmation(
     BuildContext context,

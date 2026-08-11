@@ -1,8 +1,6 @@
 // lib/providers/message_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/message_model.dart';
-import '../services/firestore_service.dart';
-import '../services/groq_service.dart';
 import 'service_providers.dart';
 
 // Get messages for a chat
@@ -131,5 +129,53 @@ class SearchParams {
   SearchParams({
     required this.chatId,
     required this.query,
+  });
+}
+
+// Toggle reaction on a message
+final toggleReactionProvider = FutureProvider.family<void, ToggleReactionParams>((ref, params) async {
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  
+  // Get current message
+  final messageDoc = await firestoreService.getChatMessage(params.chatId, params.messageId);
+  if (messageDoc == null) return;
+  
+  final currentReactions = List<String>.from(messageDoc['reactions'] ?? []);
+  final userId = params.userId;
+  
+  // Check if user already reacted with this emoji
+  final userReactionIndex = currentReactions.indexWhere((r) => r == params.reaction);
+  
+  if (userReactionIndex != -1) {
+    // Remove reaction (toggle off)
+    await firestoreService.removeReaction(
+      chatId: params.chatId,
+      messageId: params.messageId,
+      reaction: params.reaction,
+    );
+  } else {
+    // Add reaction
+    await firestoreService.addReaction(
+      chatId: params.chatId,
+      messageId: params.messageId,
+      reaction: params.reaction,
+    );
+  }
+  
+  // Invalidate to refresh
+  ref.invalidate(chatMessagesProvider(params.chatId));
+});
+
+class ToggleReactionParams {
+  final String chatId;
+  final String messageId;
+  final String userId;
+  final String reaction;
+
+  ToggleReactionParams({
+    required this.chatId,
+    required this.messageId,
+    required this.userId,
+    required this.reaction,
   });
 }

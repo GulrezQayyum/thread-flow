@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import '../services/storage_service.dart';
+import 'service_providers.dart';
 
+// Storage service provider
 final storageServiceProvider = Provider((ref) => StorageService());
 
 // Pick image from gallery
@@ -35,5 +37,21 @@ class UploadImageParams {
     required this.chatId,
     required this.messageId,
     required this.imageFile,
+  });
+}
+
+// Get image from Firestore (if using Firestore for images)
+final getImageProvider = FutureProvider.family<String?, GetImageParams>((ref, params) async {
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  return firestoreService.getImageData(params.chatId, params.messageId);
+});
+
+class GetImageParams {
+  final String chatId;
+  final String messageId;
+
+  GetImageParams({
+    required this.chatId,
+    required this.messageId,
   });
 }
