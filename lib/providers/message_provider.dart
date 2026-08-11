@@ -1,16 +1,14 @@
-import '../models/message_model.dart';
-import '../services/groq_service.dart';
-import '../services/firestore_service.dart';
+// lib/providers/message_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-
-final groqServiceProvider = Provider((ref) => GroqService());
-final firestoreServiceProvider = Provider((ref) => FirestoreService());
+import '../models/message_model.dart';
+import '../services/firestore_service.dart';
+import '../services/groq_service.dart';
+import 'service_providers.dart';
 
 // Get messages for a chat
 final chatMessagesProvider = StreamProvider.family<List<MessageModel>, String>((ref, chatId) {
   final firestoreService = ref.watch(firestoreServiceProvider);
-  return firestoreService.watchChatMessages(chatId);
+  return firestoreService.watchMessages(chatId);
 });
 
 // Get messages in a specific thread
@@ -19,24 +17,40 @@ final threadMessagesProvider = StreamProvider.family<List<MessageModel>, ThreadM
   return firestoreService.watchThreadMessages(params.chatId, params.threadId);
 });
 
-// Send a message
+// Send a message - FIXED
 final sendMessageProvider = FutureProvider.family<MessageModel, SendMessageParams>((ref, params) async {
   final firestoreService = ref.watch(firestoreServiceProvider);
-  final message = await firestoreService.sendMessage(
-    chatId: params.chatId,
-    senderId: params.senderId,
-    text: params.text,
-    mediaUrl: params.mediaUrl,
-    threadId: params.threadId,
-  );
-  // Invalidate messages to refresh
-  ref.invalidate(chatMessagesProvider(params.chatId));
-  if (params.threadId != null) {
-    ref.invalidate(threadMessagesProvider(
-      ThreadMessageParams(chatId: params.chatId, threadId: params.threadId!),
-    ));
+  
+  print('📤 SEND MESSAGE: ChatId: ${params.chatId}');
+  print('📤 SEND MESSAGE: SenderId: ${params.senderId}');
+  print('📤 SEND MESSAGE: Text: ${params.text}');
+  print('📤 SEND MESSAGE: ThreadId: ${params.threadId}');
+  
+  try {
+    final message = await firestoreService.sendMessage(
+      chatId: params.chatId,
+      senderId: params.senderId,
+      text: params.text,
+      mediaUrl: params.mediaUrl,
+      threadId: params.threadId,
+      isThreadStart: params.isThreadStart,
+    );
+    
+    print('✅ MESSAGE SENT: ${message.id}');
+    
+    // Invalidate messages to refresh
+    ref.invalidate(chatMessagesProvider(params.chatId));
+    if (params.threadId != null) {
+      ref.invalidate(threadMessagesProvider(
+        ThreadMessageParams(chatId: params.chatId, threadId: params.threadId!),
+      ));
+    }
+    
+    return message;
+  } catch (e) {
+    print('❌ SEND MESSAGE ERROR: $e');
+    throw Exception('Failed to send message: $e');
   }
-  return message;
 });
 
 // Generate summary for a thread
@@ -55,17 +69,17 @@ final generateThreadTitleProvider = FutureProvider.family<String, String>((ref, 
 final deleteMessageProvider = FutureProvider.family<void, DeleteMessageParams>((ref, params) async {
   final firestoreService = ref.watch(firestoreServiceProvider);
   await firestoreService.deleteMessage(params.chatId, params.messageId);
-  // Refresh messages
   ref.invalidate(chatMessagesProvider(params.chatId));
 });
 
 // Search messages in a chat
 final searchMessagesProvider = FutureProvider.family<List<MessageModel>, SearchParams>((ref, params) async {
   final firestoreService = ref.watch(firestoreServiceProvider);
-  return firestoreService.searchChatMessages(params.chatId, params.query);
+  return firestoreService.searchMessages(params.chatId, params.query);
 });
 
-// Parameter classes
+// ==================== PARAMETER CLASSES ====================
+
 class ThreadMessageParams {
   final String chatId;
   final String threadId;
@@ -82,6 +96,7 @@ class SendMessageParams {
   final String text;
   final String? mediaUrl;
   final String? threadId;
+  final bool isThreadStart;
 
   SendMessageParams({
     required this.chatId,
@@ -89,6 +104,7 @@ class SendMessageParams {
     required this.text,
     this.mediaUrl,
     this.threadId,
+    this.isThreadStart = false,
   });
 }
 

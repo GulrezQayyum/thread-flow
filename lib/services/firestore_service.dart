@@ -1,17 +1,17 @@
-// lib/services/firestore_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_model.dart';
 import '../models/message_model.dart';
 import '../models/thread_model.dart';
+import '../models/user_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  FirestoreService();
+  final Uuid _uuid = const Uuid();
 
   // ==================== CHAT OPERATIONS ====================
 
-  // Create a new chat
+  /// Create a new chat
   Future<ChatModel> createChat({
     required String name,
     required List<String> members,
@@ -19,10 +19,10 @@ class FirestoreService {
     String? photoURL,
   }) async {
     try {
-      final chatId = const Uuid().v4();
+      final chatId = _uuid.v4();
       final now = DateTime.now();
 
-      final chatModel = ChatModel(
+      final chat = ChatModel(
         id: chatId,
         name: name,
         members: members,
@@ -31,28 +31,26 @@ class FirestoreService {
         photoURL: photoURL,
       );
 
-      await _firestore.collection('chats').doc(chatId).set(
-        chatModel.toJson(),
-      );
+      await _firestore.collection('chats').doc(chatId).set(chat.toJson());
 
-      return chatModel;
+      return chat;
     } catch (e) {
       throw Exception('Failed to create chat: $e');
     }
   }
 
-  // Get chat by ID
-  Future<ChatModel?> getChatById(String chatId) async {
+  /// Get chat by ID
+  Future<ChatModel?> getChat(String chatId) async {
     try {
       final doc = await _firestore.collection('chats').doc(chatId).get();
       if (!doc.exists) return null;
       return ChatModel.fromJson(doc.data()!);
     } catch (e) {
-      throw Exception('Failed to fetch chat: $e');
+      throw Exception('Failed to get chat: $e');
     }
   }
 
-  // Watch chat in real-time
+  /// Watch chat in real-time
   Stream<ChatModel?> watchChat(String chatId) {
     return _firestore.collection('chats').doc(chatId).snapshots().map((doc) {
       if (!doc.exists) return null;
@@ -60,7 +58,7 @@ class FirestoreService {
     });
   }
 
-  // Get all chats for a user
+  /// Get all chats for a user
   Future<List<ChatModel>> getUserChats(String userId) async {
     try {
       final snapshot = await _firestore
@@ -73,25 +71,43 @@ class FirestoreService {
           .map((doc) => ChatModel.fromJson(doc.data()))
           .toList();
     } catch (e) {
-      throw Exception('Failed to fetch user chats: $e');
+      throw Exception('Failed to get user chats: $e');
     }
   }
 
-  // Watch all chats for a user (real-time)
+  /// Watch all chats for a user (real-time)
   Stream<List<ChatModel>> watchUserChats(String userId) {
-    return _firestore
-        .collection('chats')
-        .where('members', arrayContains: userId)
-        .orderBy('lastMessageAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => ChatModel.fromJson(doc.data()))
-          .toList();
-    });
+  return _firestore
+      .collection('chats')
+      .where('members', arrayContains: userId)
+      // .orderBy('lastMessageAt', descending: true)  // ← Commented out
+      .snapshots()
+      .map((snapshot) {
+    return snapshot.docs
+        .map((doc) => ChatModel.fromJson(doc.data()))
+        .toList();
+  });
+}
+
+
+  /// Update chat last message
+  Future<void> updateChatLastMessage({
+    required String chatId,
+    required String message,
+  }) async {
+    try {
+      await _firestore.collection('chats').doc(chatId).update({
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastMessage': message.length > 50
+            ? '${message.substring(0, 50)}...'
+            : message,
+      });
+    } catch (e) {
+      throw Exception('Failed to update chat last message: $e');
+    }
   }
 
-  // Update chat summary
+  /// Update chat summary
   Future<void> updateChatSummary(String chatId, String summary) async {
     try {
       await _firestore.collection('chats').doc(chatId).update({
@@ -102,9 +118,19 @@ class FirestoreService {
     }
   }
 
+  /// Update chat photo
+  Future<void> updateChatPhoto(String chatId, String photoURL) async {
+    try {
+      await _firestore.collection('chats').doc(chatId).update({
+        'photoURL': photoURL,
+      });
+    } catch (e) {
+      throw Exception('Failed to update chat photo: $e');
+    }
+  }
+
   // ==================== MESSAGE OPERATIONS ====================
 
-  // Send a message
   Future<MessageModel> sendMessage({
     required String chatId,
     required String senderId,
@@ -114,11 +140,11 @@ class FirestoreService {
     bool isThreadStart = false,
   }) async {
     try {
-      final messageId = const Uuid().v4();
+      final messageId = _uuid.v4();
       final now = DateTime.now();
-      final thread = threadId ?? messageId; // If no thread, this message starts one
+      final thread = threadId ?? messageId;
 
-      final messageModel = MessageModel(
+      final message = MessageModel(
         id: messageId,
         senderId: senderId,
         text: text,
@@ -128,28 +154,35 @@ class FirestoreService {
         isThreadStart: isThreadStart || threadId == null,
       );
 
-      // Add message to Firestore
+      print('📝 SAVING MESSAGE: ${message.toJson()}');
+
+      // Save message to Firestore
       await _firestore
           .collection('chats')
           .doc(chatId)
           .collection('messages')
           .doc(messageId)
-          .set(messageModel.toJson());
+          .set(message.toJson());
+
+      print('✅ MESSAGE SAVED TO FIRESTORE');
 
       // Update chat's last message
       await _firestore.collection('chats').doc(chatId).update({
-        'lastMessageAt': now,
+        'lastMessageAt': FieldValue.serverTimestamp(),
         'lastMessage': text.length > 50 ? '${text.substring(0, 50)}...' : text,
       });
 
-      return messageModel;
+      print('✅ CHAT UPDATED');
+
+      return message;
     } catch (e) {
+      print('❌ SEND MESSAGE ERROR: $e');
       throw Exception('Failed to send message: $e');
     }
   }
 
-  // Get messages for a chat
-  Future<List<MessageModel>> getChatMessages(
+  /// Get messages for a chat
+  Future<List<MessageModel>> getMessages(
     String chatId, {
     int limit = 50,
   }) async {
@@ -166,14 +199,14 @@ class FirestoreService {
           .map((doc) => MessageModel.fromJson(doc.data()))
           .toList()
           .reversed
-          .toList(); // Reverse to get chronological order
+          .toList();
     } catch (e) {
-      throw Exception('Failed to fetch messages: $e');
+      throw Exception('Failed to get messages: $e');
     }
   }
 
-  // Watch messages for a chat (real-time)
-  Stream<List<MessageModel>> watchChatMessages(String chatId) {
+  /// Watch messages for a chat (real-time)
+  Stream<List<MessageModel>> watchMessages(String chatId) {
     return _firestore
         .collection('chats')
         .doc(chatId)
@@ -181,13 +214,13 @@ class FirestoreService {
         .orderBy('createdAt')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => MessageModel.fromJson(doc.data()))
-          .toList();
-    });
+          return snapshot.docs
+              .map((doc) => MessageModel.fromJson(doc.data()))
+              .toList();
+        });
   }
 
-  // Get messages in a thread
+  /// Get messages in a thread
   Future<List<MessageModel>> getThreadMessages(
     String chatId,
     String threadId,
@@ -205,11 +238,11 @@ class FirestoreService {
           .map((doc) => MessageModel.fromJson(doc.data()))
           .toList();
     } catch (e) {
-      throw Exception('Failed to fetch thread messages: $e');
+      throw Exception('Failed to get thread messages: $e');
     }
   }
 
-  // Watch thread messages (real-time)
+  /// Watch thread messages (real-time)
   Stream<List<MessageModel>> watchThreadMessages(
     String chatId,
     String threadId,
@@ -222,13 +255,13 @@ class FirestoreService {
         .orderBy('createdAt')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => MessageModel.fromJson(doc.data()))
-          .toList();
-    });
+          return snapshot.docs
+              .map((doc) => MessageModel.fromJson(doc.data()))
+              .toList();
+        });
   }
 
-  // Delete a message
+  /// Delete a message
   Future<void> deleteMessage(String chatId, String messageId) async {
     try {
       await _firestore
@@ -242,35 +275,381 @@ class FirestoreService {
     }
   }
 
+  /// Add reaction to a message
+  Future<void> addReaction({
+    required String chatId,
+    required String messageId,
+    required String reaction,
+  }) async {
+    try {
+      await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(messageId)
+          .update({
+            'reactions': FieldValue.arrayUnion([reaction]),
+          });
+    } catch (e) {
+      throw Exception('Failed to add reaction: $e');
+    }
+  }
+
+  /// Remove reaction from a message
+  Future<void> removeReaction({
+    required String chatId,
+    required String messageId,
+    required String reaction,
+  }) async {
+    try {
+      await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(messageId)
+          .update({
+            'reactions': FieldValue.arrayRemove([reaction]),
+          });
+    } catch (e) {
+      throw Exception('Failed to remove reaction: $e');
+    }
+  }
+
   // ==================== THREAD OPERATIONS ====================
 
-  // Get thread summary (first message + metadata)
-  Future<ThreadModel?> getThreadSummary(
-    String chatId,
-    String threadId,
-  ) async {
+  /// Update thread message count
+  Future<void> _updateThreadMessageCount(String chatId, String threadId) async {
     try {
+      // Get all messages in thread
       final messages = await getThreadMessages(chatId, threadId);
-      if (messages.isEmpty) return null;
 
-      final firstMessage = messages.first;
-      final lastMessage = messages.last;
+      // Update thread document or create if doesn't exist
+      final threadRef = _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('threads')
+          .doc(threadId);
 
+      final threadDoc = await threadRef.get();
+
+      if (threadDoc.exists) {
+        await threadRef.update({
+          'messageCount': messages.length,
+          'lastMessageAt': FieldValue.serverTimestamp(),
+        });
+      } else if (messages.isNotEmpty) {
+        // Create thread document
+        final firstMessage = messages.first;
+        await threadRef.set({
+          'threadId': threadId,
+          'firstMessage': firstMessage.text,
+          'firstSenderId': firstMessage.senderId,
+          'startedAt': firstMessage.createdAt,
+          'messageCount': messages.length,
+          'lastMessageAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      // Don't throw - this is a secondary operation
+      print('Failed to update thread: $e');
+    }
+  }
+
+  /// Get thread summary
+  Future<ThreadModel?> getThreadSummary(String chatId, String threadId) async {
+    try {
+      final doc = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('threads')
+          .doc(threadId)
+          .get();
+
+      if (!doc.exists) return null;
+
+      final data = doc.data()!;
       return ThreadModel(
-        threadId: threadId,
-        firstMessage: firstMessage.text,
-        firstSenderId: firstMessage.senderId,
-        startedAt: firstMessage.createdAt,
-        messageCount: messages.length,
-        lastMessageAt: lastMessage.createdAt,
+        threadId: data['threadId'] ?? threadId,
+        firstMessage: data['firstMessage'] ?? '',
+        firstSenderId: data['firstSenderId'] ?? '',
+        startedAt: (data['startedAt'] as Timestamp).toDate(),
+        messageCount: data['messageCount'] ?? 0,
+        lastMessageAt: data['lastMessageAt'] != null
+            ? (data['lastMessageAt'] as Timestamp).toDate()
+            : null,
+        summary: data['summary'],
       );
     } catch (e) {
       throw Exception('Failed to get thread summary: $e');
     }
   }
 
-  // Get all unique threads in a chat
-  Future<List<String>> getChatThreads(String chatId) async {
+  /// Get all threads in a chat
+  Future<List<ThreadModel>> getThreads(String chatId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('threads')
+          .orderBy('lastMessageAt', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return ThreadModel(
+          threadId: data['threadId'] ?? doc.id,
+          firstMessage: data['firstMessage'] ?? '',
+          firstSenderId: data['firstSenderId'] ?? '',
+          startedAt: (data['startedAt'] as Timestamp).toDate(),
+          messageCount: data['messageCount'] ?? 0,
+          lastMessageAt: data['lastMessageAt'] != null
+              ? (data['lastMessageAt'] as Timestamp).toDate()
+              : null,
+          summary: data['summary'],
+        );
+      }).toList();
+    } catch (e) {
+      throw Exception('Failed to get threads: $e');
+    }
+  }
+
+  /// Watch threads in a chat (real-time)
+  Stream<List<ThreadModel>> watchThreads(String chatId) {
+    return _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('threads')
+        .orderBy('lastMessageAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            return ThreadModel(
+              threadId: data['threadId'] ?? doc.id,
+              firstMessage: data['firstMessage'] ?? '',
+              firstSenderId: data['firstSenderId'] ?? '',
+              startedAt: (data['startedAt'] as Timestamp).toDate(),
+              messageCount: data['messageCount'] ?? 0,
+              lastMessageAt: data['lastMessageAt'] != null
+                  ? (data['lastMessageAt'] as Timestamp).toDate()
+                  : null,
+              summary: data['summary'],
+            );
+          }).toList();
+        });
+  }
+
+  /// Update thread summary (AI-generated)
+  Future<void> updateThreadSummary({
+    required String chatId,
+    required String threadId,
+    required String summary,
+  }) async {
+    try {
+      await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('threads')
+          .doc(threadId)
+          .update({'summary': summary});
+    } catch (e) {
+      throw Exception('Failed to update thread summary: $e');
+    }
+  }
+
+  // ==================== USER OPERATIONS ====================
+
+  /// Get a single user
+  Future<UserModel?> getUser(String userId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return null;
+      return UserModel.fromJson(doc.data()!);
+    } catch (e) {
+      throw Exception('Failed to get user: $e');
+    }
+  }
+
+  /// Watch a single user (real-time)
+  Stream<UserModel?> watchUser(String userId) {
+    return _firestore.collection('users').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return UserModel.fromJson(doc.data()!);
+    });
+  }
+
+  /// Get multiple users
+  Future<List<UserModel>> getUsers(List<String> userIds) async {
+    try {
+      if (userIds.isEmpty) return [];
+
+      final snapshot = await _firestore
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: userIds)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => UserModel.fromJson(doc.data()))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get users: $e');
+    }
+  }
+
+  /// Search users by email
+  Future<List<UserModel>> searchUsersByEmail(String email) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => UserModel.fromJson(doc.data()))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to search users: $e');
+    }
+  }
+
+  /// Search users by display name
+  Future<List<UserModel>> searchUsersByName(String name) async {
+    try {
+      // Firestore doesn't support partial matches natively
+      // Using startAt/endAt for prefix matching
+      final snapshot = await _firestore
+          .collection('users')
+          .where('displayName', isGreaterThanOrEqualTo: name)
+          .where('displayName', isLessThan: '${name}z')
+          .get();
+
+      return snapshot.docs
+          .map((doc) => UserModel.fromJson(doc.data()))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to search users by name: $e');
+    }
+  }
+
+  /// Create or update user
+  Future<void> setUser(UserModel user) async {
+    try {
+      await _firestore.collection('users').doc(user.uid).set(user.toJson());
+    } catch (e) {
+      throw Exception('Failed to set user: $e');
+    }
+  }
+
+  /// Update user last seen
+  Future<void> updateUserLastSeen(String userId) async {
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'lastSeen': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update last seen: $e');
+    }
+  }
+
+  /// Add user to chat
+  Future<void> addUserToChat({
+    required String chatId,
+    required String userId,
+  }) async {
+    try {
+      final chatRef = _firestore.collection('chats').doc(chatId);
+
+      // Add user to chat members
+      await chatRef.update({
+        'members': FieldValue.arrayUnion([userId]),
+      });
+
+      // Add chat to user's chat list
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('chats')
+          .doc(chatId)
+          .set({'chatId': chatId, 'addedAt': FieldValue.serverTimestamp()});
+    } catch (e) {
+      throw Exception('Failed to add user to chat: $e');
+    }
+  }
+
+  /// Remove user from chat
+  Future<void> removeUserFromChat({
+    required String chatId,
+    required String userId,
+  }) async {
+    try {
+      final chatRef = _firestore.collection('chats').doc(chatId);
+
+      // Remove user from chat members
+      await chatRef.update({
+        'members': FieldValue.arrayRemove([userId]),
+      });
+
+      // Remove chat from user's chat list
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('chats')
+          .doc(chatId)
+          .delete();
+    } catch (e) {
+      throw Exception('Failed to remove user from chat: $e');
+    }
+  }
+
+  // ==================== SEARCH OPERATIONS ====================
+
+  /// Search messages in a chat
+  Future<List<MessageModel>> searchMessages(String chatId, String query) async {
+    try {
+      // Get all messages (limited to avoid performance issues)
+      final snapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .limit(1000)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => MessageModel.fromJson(doc.data()))
+          .where((msg) => msg.text.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to search messages: $e');
+    }
+  }
+
+  /// Get recent messages
+  Future<List<MessageModel>> getRecentMessages(
+    String chatId, {
+    int limit = 20,
+  }) async {
+    try {
+      final snapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => MessageModel.fromJson(doc.data()))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get recent messages: $e');
+    }
+  }
+
+  // ==================== BATCH OPERATIONS ====================
+
+  /// Delete all messages in a chat (admin only)
+  Future<void> deleteAllMessages(String chatId) async {
     try {
       final snapshot = await _firestore
           .collection('chats')
@@ -278,63 +657,19 @@ class FirestoreService {
           .collection('messages')
           .get();
 
-      final threadIds = <String>{};
+      final batch = _firestore.batch();
       for (var doc in snapshot.docs) {
-        threadIds.add(doc['threadId'] as String);
+        batch.delete(doc.reference);
       }
+      await batch.commit();
 
-      return threadIds.toList();
+      // Update chat
+      await _firestore.collection('chats').doc(chatId).update({
+        'lastMessageAt': null,
+        'lastMessage': null,
+      });
     } catch (e) {
-      throw Exception('Failed to fetch threads: $e');
-    }
-  }
-
-  // Watch threads in a chat (real-time)
-  Stream<List<ThreadModel>> watchChatThreads(String chatId) async* {
-    try {
-      await for (var snapshot in _firestore
-          .collection('chats')
-          .doc(chatId)
-          .collection('messages')
-          .orderBy('createdAt', descending: true)
-          .snapshots()) {
-        final threadMap = <String, ThreadModel>{};
-
-        for (var doc in snapshot.docs) {
-          final message = MessageModel.fromJson(doc.data());
-          final threadId = message.threadId;
-
-          if (!threadMap.containsKey(threadId)) {
-            // Get or create thread summary
-            final thread = await getThreadSummary(chatId, threadId);
-            if (thread != null) {
-              threadMap[threadId] = thread;
-            }
-          }
-        }
-
-        yield threadMap.values.toList();
-      }
-    } catch (e) {
-      throw Exception('Failed to watch threads: $e');
-    }
-  }
-
-  // ==================== SEARCH OPERATIONS ====================
-
-  // Search messages in a chat
-  Future<List<MessageModel>> searchChatMessages(
-    String chatId,
-    String query,
-  ) async {
-    try {
-      final allMessages = await getChatMessages(chatId, limit: 1000);
-      return allMessages
-          .where((msg) =>
-          msg.text.toLowerCase().contains(query.toLowerCase()))
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to search messages: $e');
+      throw Exception('Failed to delete all messages: $e');
     }
   }
 }

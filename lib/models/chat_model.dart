@@ -53,8 +53,10 @@ class ChatModel {
     String? name,
     List<String>? members,
     DateTime? lastMessageAt,
+    String? onFocusChange,
     String? lastMessage,
     String? summary,
+    String? photoURL,
   }) => ChatModel(
     id: id,
     name: name ?? this.name,
@@ -64,6 +66,6 @@ class ChatModel {
     lastMessageAt: lastMessageAt ?? this.lastMessageAt,
     lastMessage: lastMessage ?? this.lastMessage,
     summary: summary ?? this.summary,
-    photoURL: photoURL,
+    photoURL: photoURL ?? this.photoURL,
   );
 }

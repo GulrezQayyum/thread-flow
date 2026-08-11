@@ -1,163 +1,98 @@
+// lib/ui/widgets/create_chat_dialog_simple.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import '../../providers/chat_provider.dart';
 import '../../providers/auth_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/chat_provider.dart';
 
 class CreateChatDialog extends HookConsumerWidget {
   const CreateChatDialog({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final chatNameController = useTextEditingController();
+    final nameController = useTextEditingController();
     final isLoading = useState(false);
-    final errorMessage = useState<String?>(null);
+    final error = useState<String?>(null);
 
     return AlertDialog(
       title: const Text('Create New Chat'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Chat name input
-            TextField(
-              controller: chatNameController,
-              decoration: const InputDecoration(
-                labelText: 'Chat Name',
-                hintText: 'e.g., Project Discussion',
-                prefixIcon: Icon(Icons.chat_outlined),
-              ),
-              enabled: !isLoading.value,
-              onChanged: (_) {
-                // Clear error when user types
-                if (errorMessage.value != null) {
-                  errorMessage.value = null;
-                }
-              },
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(
+              labelText: 'Chat Name',
+              hintText: 'e.g., Project Work',
             ),
+            onChanged: (_) {
+              error.value = null;
+            },
+          ),
+          if (error.value != null) ...[
             const SizedBox(height: 16),
-            
-            // Members info
             Text(
-              'Members',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+              error.value!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 12,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'You will be added automatically. Add more members after creation.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            
-            // Error message display
-            if (errorMessage.value != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.error.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      color: Theme.of(context).colorScheme.error,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        errorMessage.value!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
-        ),
+        ],
       ),
       actions: [
-        // Cancel button
         TextButton(
           onPressed: isLoading.value ? null : () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        
-        // Create chat button
         ElevatedButton(
           onPressed: isLoading.value
               ? null
               : () async {
-                  errorMessage.value = null;
-
-                  // Validate chat name
-                  if (chatNameController.text.trim().isEmpty) {
-                    errorMessage.value = 'Please enter a chat name';
+                  if (nameController.text.trim().isEmpty) {
+                    error.value = 'Please enter a chat name';
                     return;
                   }
 
                   isLoading.value = true;
                   try {
-                    // Get auth service and current Firebase user
+                    print('➕ CREATE: Creating chat...');
+                    
                     final authService = ref.read(authServiceProvider);
                     final firebaseUser = authService.currentUser;
 
-                    // Check if user is logged in
                     if (firebaseUser == null) {
-                      errorMessage.value = 'Please sign in first';
-                      isLoading.value = false;
-                      return;
+                      throw Exception('User not logged in');
                     }
 
-                    print('👤 Creating chat for user: ${firebaseUser.uid}');
+                    print('👤 CREATE: User ID: ${firebaseUser.uid}');
 
-                    // Create chat with current user as member
                     final chat = await ref.read(
                       createChatProvider(
                         CreateChatParams(
-                          name: chatNameController.text.trim(),
+                          name: nameController.text.trim(),
                           members: [firebaseUser.uid],
                           createdBy: firebaseUser.uid,
                         ),
                       ).future,
                     );
 
-                    print('✅ Chat created: ${chat.id}');
+                    print('✅ CREATE: Chat created: ${chat.id}');
 
-                    // Close dialog and show success message
                     if (context.mounted) {
                       Navigator.pop(context);
-                      
-                      // Show success snackbar
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(
-                            'Chat "${chat.name}" created successfully! 🎉',
-                          ),
+                          content: Text('Chat "${chat.name}" created! ✅'),
                           backgroundColor: Colors.green,
                           duration: const Duration(seconds: 2),
                         ),
                       );
                     }
-                  } on FirebaseAuthException catch (e) {
-                    print('❌ Firebase Auth Error: ${e.code} - ${e.message}');
-                    errorMessage.value = 'Auth error: ${e.message}';
                   } catch (e) {
-                    print('❌ Error creating chat: $e');
-                    errorMessage.value = 
-                        e.toString().replaceFirst('Exception: ', '');
+                    print('❌ CREATE ERROR: $e');
+                    error.value = 'Error: $e';
                   } finally {
                     isLoading.value = false;
                   }
@@ -166,12 +101,9 @@ class CreateChatDialog extends HookConsumerWidget {
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Create Chat'),
+              : const Text('Create'),
         ),
       ],
     );

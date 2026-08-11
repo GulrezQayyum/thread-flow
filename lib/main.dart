@@ -3,7 +3,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'config/firebase_config.dart';
-import 'config/firebase_options.dart';
 import 'ui/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'ui/screens/auth/login_screen.dart';

@@ -9,7 +9,8 @@ class MessageModel {
   final String threadId; // Groups messages into threads
   final bool isThreadStart; // First message in thread
   final List<String> reactions; // emoji reactions
- 
+  final String? messageType;
+
   MessageModel({
     required this.id,
     required this.senderId,
@@ -19,6 +20,8 @@ class MessageModel {
     required this.threadId,
     this.isThreadStart = false,
     this.reactions = const [],
+    this.messageType = 'text',
+
   });
  
   Map<String, dynamic> toJson() => {
@@ -30,6 +33,8 @@ class MessageModel {
     'threadId': threadId,
     'isThreadStart': isThreadStart,
     'reactions': reactions,
+    'messageType': messageType,
+
   };
  
   factory MessageModel.fromJson(Map<String, dynamic> json) => MessageModel(
@@ -41,6 +46,7 @@ class MessageModel {
     threadId: json['threadId'] ?? '',
     isThreadStart: json['isThreadStart'] ?? false,
     reactions: List<String>.from(json['reactions'] ?? []),
+    messageType: json['messageType'] ?? 'text',
   );
  
   MessageModel copyWith({
@@ -55,5 +61,6 @@ class MessageModel {
     threadId: threadId,
     isThreadStart: isThreadStart,
     reactions: reactions ?? this.reactions,
+    messageType: messageType,
   );
 }

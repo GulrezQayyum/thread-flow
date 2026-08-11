@@ -109,7 +109,6 @@ class LoginScreen extends HookConsumerWidget {
                 ),
               if (errorMessage.value != null) const SizedBox(height: 16),
               // Sign In Button
-              // Sign In Button
               ElevatedButton(
                 onPressed: isLoading.value
                     ? null
@@ -144,7 +143,9 @@ class LoginScreen extends HookConsumerWidget {
                             '',
                           );
                         } finally {
-                          isLoading.value = false;
+                          if (context.mounted) {
+                            isLoading.value = false;
+                          }
                         }
                       },
                 child: isLoading.value

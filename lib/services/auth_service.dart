@@ -1,4 +1,3 @@
-// lib/services/auth_service.dart - CORRECTED & COMPLETE VERSION
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
@@ -7,45 +6,34 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Get current authenticated user from Firebase Auth
-  User? get currentUser {
-    final user = _auth.currentUser;
-    if (user != null) {
-      print('✅ Current user: ${user.uid} (${user.email})');
-    }
-    return user;
-  }
-
-  // Stream of auth state changes
+  User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// Sign up with email and password
+  /// Sign up - ENSURES user document is created
   Future<UserModel?> signUp({
     required String email,
     required String password,
     required String displayName,
   }) async {
     try {
-      print('📝 Signing up: $email');
-      
-      // Create Firebase Auth user
+      print('📝 SIGNUP: Starting signup for $email');
+
+      // Step 1: Create Firebase Auth user
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
       final user = userCredential.user;
-      if (user == null) {
-        throw Exception('Failed to create user');
-      }
+      if (user == null) throw Exception('Failed to create Firebase auth user');
 
-      // Update display name in Firebase Auth
+      print('✅ SIGNUP: Firebase user created: ${user.uid}');
+
+      // Step 2: Update display name
       await user.updateDisplayName(displayName);
-      await user.reload();
+      print('✅ SIGNUP: Display name updated');
 
-      print('✅ Firebase Auth user created: ${user.uid}');
-
-      // Create user document in Firestore
+      // Step 3: Create Firestore user document
       final userModel = UserModel(
         uid: user.uid,
         email: email.trim(),
@@ -55,90 +43,130 @@ class AuthService {
 
       await _firestore.collection('users').doc(user.uid).set(
         userModel.toJson(),
+        SetOptions(merge: true),
       );
 
-      print('✅ Firestore user document created');
+      print('✅ SIGNUP: Firestore user document created');
+
+      // Step 4: Verify document was created
+      final verifyDoc = await _firestore.collection('users').doc(user.uid).get();
+      if (!verifyDoc.exists) {
+        throw Exception('User document was not created in Firestore');
+      }
+
+      print('✅ SIGNUP: User document verified in Firestore');
       return userModel;
     } on FirebaseAuthException catch (e) {
-      print('❌ Sign up error: ${e.code} - ${e.message}');
+      print('❌ SIGNUP AUTH ERROR: ${e.code} - ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      print('❌ Unexpected error during sign up: $e');
+      print('❌ SIGNUP ERROR: $e');
       throw Exception('Sign up failed: $e');
     }
   }
 
-  /// Sign in with email and password
+  /// Sign in - Ensures user document exists
   Future<UserModel?> signIn({
     required String email,
     required String password,
   }) async {
     try {
-      print('🔐 Signing in: $email');
-      
+      print('🔐 SIGNIN: Starting signin for $email');
+
+      // Step 1: Sign in
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
       final user = userCredential.user;
-      if (user == null) {
-        throw Exception('Failed to sign in');
-      }
+      if (user == null) throw Exception('Failed to sign in');
 
-      print('✅ Firebase Auth sign in successful: ${user.uid}');
+      print('✅ SIGNIN: Firebase auth successful: ${user.uid}');
 
-      // Update lastSeen timestamp
+      // Step 2: Update lastSeen
       await _firestore.collection('users').doc(user.uid).update({
         'lastSeen': DateTime.now(),
       }).catchError((e) {
-        print('⚠️ Could not update lastSeen: $e');
+        print('⚠️ SIGNIN: Could not update lastSeen: $e');
       });
 
-      // Fetch and return user model
+      // Step 3: Get user document
       final userModel = await getUserById(user.uid);
-      print('✅ User profile fetched');
+
+      if (userModel == null) {
+        print('⚠️ SIGNIN: User document not found, creating...');
+        final newUser = UserModel(
+          uid: user.uid,
+          email: email.trim(),
+          displayName: user.displayName ?? 'User',
+          createdAt: DateTime.now(),
+        );
+        await _firestore.collection('users').doc(user.uid).set(
+          newUser.toJson(),
+          SetOptions(merge: true),
+        );
+        print('✅ SIGNIN: Created missing user document');
+        return newUser;
+      }
+
+      print('✅ SIGNIN: User found: ${userModel.displayName}');
       return userModel;
     } on FirebaseAuthException catch (e) {
-      print('❌ Sign in error: ${e.code} - ${e.message}');
+      print('❌ SIGNIN AUTH ERROR: ${e.code} - ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      print('❌ Unexpected error during sign in: $e');
+      print('❌ SIGNIN ERROR: $e');
       throw Exception('Sign in failed: $e');
     }
   }
 
-  /// Get user profile by ID
+  /// Get user by ID with detailed debugging
   Future<UserModel?> getUserById(String uid) async {
     try {
-      print('📋 Fetching user: $uid');
-      
+      print('📋 GETUSER: Fetching user: $uid');
+
       final doc = await _firestore.collection('users').doc(uid).get();
-      
+
       if (!doc.exists) {
-        print('⚠️ User document not found: $uid');
+        print('❌ GETUSER: User document does NOT exist: $uid');
         return null;
       }
 
-      final userModel = UserModel.fromJson(doc.data()!);
-      print('✅ User fetched: ${userModel.displayName}');
+      final data = doc.data();
+      if (data == null) {
+        print('⚠️ GETUSER: Document exists but data is null: $uid');
+        return null;
+      }
+
+      print('✅ GETUSER: Document found with data: $data');
+      final userModel = UserModel.fromJson(data);
+      print('✅ GETUSER: User model created: ${userModel.displayName}');
       return userModel;
     } catch (e) {
-      print('❌ Error fetching user: $e');
+      print('❌ GETUSER ERROR: $e');
       throw Exception('Failed to fetch user: $e');
     }
   }
 
   /// Watch user profile in real-time
   Stream<UserModel?> watchUser(String uid) {
+    print('👁️ WATCHUSER: Starting watch for $uid');
     return _firestore.collection('users').doc(uid).snapshots().map((doc) {
       if (!doc.exists) {
-        print('⚠️ User document deleted: $uid');
+        print('⚠️ WATCHUSER: Document not found: $uid');
         return null;
       }
-      return UserModel.fromJson(doc.data()!);
+      try {
+        final userModel = UserModel.fromJson(doc.data()!);
+        print('✅ WATCHUSER: Update received for ${userModel.displayName}');
+        return userModel;
+      } catch (e) {
+        print('❌ WATCHUSER ERROR: $e');
+        return null;
+      }
     }).handleError((error) {
-      print('❌ Error watching user: $error');
+      print('❌ WATCHUSER STREAM ERROR: $error');
     });
   }
 
@@ -151,24 +179,21 @@ class AuthService {
       final user = currentUser;
       if (user == null) throw Exception('No user logged in');
 
-      print('✏️ Updating profile: $displayName');
+      print('✏️ UPDATE: Updating profile for ${user.uid}');
 
-      // Update Firebase Auth
       await user.updateDisplayName(displayName);
       if (photoURL != null) {
         await user.updatePhotoURL(photoURL);
       }
-      await user.reload();
 
-      // Update Firestore
       await _firestore.collection('users').doc(user.uid).update({
         'displayName': displayName,
         if (photoURL != null) 'photoURL': photoURL,
       });
 
-      print('✅ Profile updated successfully');
+      print('✅ UPDATE: Profile updated');
     } catch (e) {
-      print('❌ Error updating profile: $e');
+      print('❌ UPDATE ERROR: $e');
       throw Exception('Failed to update profile: $e');
     }
   }
@@ -178,20 +203,19 @@ class AuthService {
     try {
       final user = currentUser;
       if (user != null) {
-        print('👋 Signing out: ${user.uid}');
-        
-        // Update lastSeen before signing out
+        print('👋 SIGNOUT: Signing out ${user.uid}');
+
         await _firestore.collection('users').doc(user.uid).update({
           'lastSeen': DateTime.now(),
         }).catchError((e) {
-          print('⚠️ Could not update lastSeen: $e');
+          print('⚠️ SIGNOUT: Could not update lastSeen: $e');
         });
       }
 
       await _auth.signOut();
-      print('✅ Sign out successful');
+      print('✅ SIGNOUT: Complete');
     } catch (e) {
-      print('❌ Error signing out: $e');
+      print('❌ SIGNOUT ERROR: $e');
       throw Exception('Failed to sign out: $e');
     }
   }
@@ -202,17 +226,14 @@ class AuthService {
       final user = currentUser;
       if (user == null) throw Exception('No user logged in');
 
-      print('🗑️ Deleting account: ${user.uid}');
+      print('🗑️ DELETE: Deleting account ${user.uid}');
 
-      // Delete Firestore user document
       await _firestore.collection('users').doc(user.uid).delete();
-
-      // Delete Firebase Auth user
       await user.delete();
 
-      print('✅ Account deleted successfully');
+      print('✅ DELETE: Account deleted');
     } catch (e) {
-      print('❌ Error deleting account: $e');
+      print('❌ DELETE ERROR: $e');
       throw Exception('Failed to delete account: $e');
     }
   }
@@ -220,41 +241,32 @@ class AuthService {
   /// Send password reset email
   Future<void> sendPasswordResetEmail(String email) async {
     try {
-      print('📧 Sending password reset to: $email');
+      print('📧 RESET: Sending reset email to $email');
       await _auth.sendPasswordResetEmail(email: email.trim());
-      print('✅ Password reset email sent');
+      print('✅ RESET: Email sent');
     } on FirebaseAuthException catch (e) {
-      print('❌ Password reset error: ${e.code} - ${e.message}');
+      print('❌ RESET AUTH ERROR: ${e.code} - ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      print('❌ Error sending password reset: $e');
-      throw Exception('Failed to send password reset email: $e');
+      print('❌ RESET ERROR: $e');
+      throw Exception('Failed to send password reset: $e');
     }
   }
 
-  /// Handle Firebase Auth exceptions with user-friendly messages
+  /// Handle Firebase auth exceptions
   String _handleAuthException(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'weak-password':
-        return 'Password is too weak. Use at least 6 characters with uppercase, lowercase, and numbers.';
-      case 'email-already-in-use':
-        return 'This email is already registered. Please sign in instead.';
-      case 'invalid-email':
-        return 'Please enter a valid email address.';
-      case 'user-disabled':
-        return 'This account has been disabled.';
-      case 'user-not-found':
-        return 'No account found with this email.';
-      case 'wrong-password':
-        return 'Incorrect password. Please try again.';
-      case 'too-many-requests':
-        return 'Too many login attempts. Please try again later.';
-      case 'network-request-failed':
-        return 'Network error. Please check your connection.';
-      case 'operation-not-allowed':
-        return 'This operation is not allowed.';
-      default:
-        return 'Authentication error: ${e.message ?? e.code}';
-    }
+    final message = switch (e.code) {
+      'weak-password' => 'Password too weak. Use 6+ chars with mixed case.',
+      'email-already-in-use' => 'Email already registered.',
+      'invalid-email' => 'Invalid email format.',
+      'user-disabled' => 'Account has been disabled.',
+      'user-not-found' => 'No account found with this email.',
+      'wrong-password' => 'Incorrect password.',
+      'too-many-requests' => 'Too many attempts. Try later.',
+      'network-request-failed' => 'Network error. Check connection.',
+      _ => 'Auth error: ${e.message}',
+    };
+    print('❌ AUTH EXCEPTION: $message');
+    return message;
   }
 }
