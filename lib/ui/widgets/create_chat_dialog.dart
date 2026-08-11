@@ -1,103 +1,47 @@
-// lib/ui/widgets/create_chat_dialog_simple.dart
+// lib/ui/widgets/create_chat_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 
-class CreateChatDialog extends HookConsumerWidget {
+class CreateChatDialog extends ConsumerStatefulWidget {
   const CreateChatDialog({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final nameController = useTextEditingController();
-    final isLoading = useState(false);
-    final error = useState<String?>(null);
+  ConsumerState<CreateChatDialog> createState() => _CreateChatDialogState();
+}
 
+class _CreateChatDialogState extends ConsumerState<CreateChatDialog> {
+  final TextEditingController _nameController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Create New Chat'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const Text('Enter a name for your chat'),
+          const SizedBox(height: 16),
           TextField(
-            controller: nameController,
+            controller: _nameController,
             decoration: const InputDecoration(
-              labelText: 'Chat Name',
-              hintText: 'e.g., Project Work',
+              hintText: 'Chat name...',
+              border: OutlineInputBorder(),
             ),
-            onChanged: (_) {
-              error.value = null;
-            },
+            autofocus: true,
           ),
-          if (error.value != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              error.value!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
-              ),
-            ),
-          ],
         ],
       ),
       actions: [
         TextButton(
-          onPressed: isLoading.value ? null : () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: isLoading.value
-              ? null
-              : () async {
-                  if (nameController.text.trim().isEmpty) {
-                    error.value = 'Please enter a chat name';
-                    return;
-                  }
-
-                  isLoading.value = true;
-                  try {
-                    print('➕ CREATE: Creating chat...');
-                    
-                    final authService = ref.read(authServiceProvider);
-                    final firebaseUser = authService.currentUser;
-
-                    if (firebaseUser == null) {
-                      throw Exception('User not logged in');
-                    }
-
-                    print('👤 CREATE: User ID: ${firebaseUser.uid}');
-
-                    final chat = await ref.read(
-                      createChatProvider(
-                        CreateChatParams(
-                          name: nameController.text.trim(),
-                          members: [firebaseUser.uid],
-                          createdBy: firebaseUser.uid,
-                        ),
-                      ).future,
-                    );
-
-                    print('✅ CREATE: Chat created: ${chat.id}');
-
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Chat "${chat.name}" created! ✅'),
-                          backgroundColor: Colors.green,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    print('❌ CREATE ERROR: $e');
-                    error.value = 'Error: $e';
-                  } finally {
-                    isLoading.value = false;
-                  }
-                },
-          child: isLoading.value
+          onPressed: _isLoading ? null : _createChat,
+          child: _isLoading
               ? const SizedBox(
                   width: 20,
                   height: 20,
@@ -107,5 +51,54 @@ class CreateChatDialog extends HookConsumerWidget {
         ),
       ],
     );
+  }
+
+  void _createChat() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a chat name')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final currentUser = ref.read(currentUserStreamProvider).value;
+      if (currentUser == null) {
+        throw Exception('User not logged in');
+      }
+
+      // ✅ Create chat with the current user as the first member
+      await ref.read(
+        createChatProvider(
+          CreateChatParams(
+            name: name,
+            members: [currentUser.uid], // Add current user as member
+            createdBy: currentUser.uid,
+          ),
+        ).future,
+      );
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chat created successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error creating chat: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }

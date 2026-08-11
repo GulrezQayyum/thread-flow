@@ -1,4 +1,4 @@
-// lib/ui/screens/home_screen.dart - WORKING VERSION
+// lib/ui/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../providers/auth_provider.dart';
@@ -49,7 +49,9 @@ class HomeScreen extends ConsumerWidget {
           if (user == null) {
             return const Center(child: Text('Not logged in'));
           }
-          return const ChatList();
+          
+          // ✅ Pass the user ID to ChatList
+          return ChatList(userId: user.uid);
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, st) => Center(child: Text('Error: $err')),
