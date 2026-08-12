@@ -1,40 +1,84 @@
 // lib/providers/auth_provider.dart
-import 'package:riverpod/riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../models/user_model.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_service.dart';
+import '../models/user_model.dart';
 
-final authServiceProvider = Provider((ref) => AuthService());
-
-// Stream of Firebase auth state changes
-final authStateProvider = StreamProvider<User?>((ref) {
-  final authService = ref.watch(authServiceProvider);
-  return authService.authStateChanges;
+final authServiceProvider = Provider<AuthService>((ref) {
+  return AuthService();
 });
 
-// Current authenticated user
-final currentUserProvider = FutureProvider<UserModel?>((ref) async {
-  final authService = ref.watch(authServiceProvider);
-  final user = authService.currentUser;
-  if (user == null) return null;
-  return authService.getUserById(user.uid);
+final authControllerProvider = NotifierProvider<AuthController, AuthState>(() {
+  return AuthController();
 });
 
-// Watch current user profile in real-time
+final authStateProvider = Provider<AuthState>((ref) {
+  return ref.watch(authControllerProvider);
+});
+
+final currentUserProvider = Provider<UserModel?>((ref) {
+  return ref.watch(authControllerProvider).user;
+});
+
 final currentUserStreamProvider = StreamProvider<UserModel?>((ref) {
   final authService = ref.watch(authServiceProvider);
-  final user = authService.currentUser;
-  if (user == null) return Stream.value(null);
-  return authService.watchUser(user.uid);
+  return authService.authStateChanges.map((firebaseUser) {
+    if (firebaseUser == null) return null;
+    return UserModel(
+      uid: firebaseUser.uid,
+      email: firebaseUser.email ?? '',
+      displayName: firebaseUser.displayName ?? 'Anonymous',
+      photoURL: firebaseUser.photoURL,
+      createdAt: firebaseUser.metadata.creationTime ?? DateTime.now(),
+    );
+  });
 });
 
-// --- Modern AsyncNotifier for Auth Actions ---
+class AuthState {
+  final UserModel? user;
+  final bool isLoading;
+  final String? error;
 
-class AuthController extends AsyncNotifier<void> {
+  AuthState({
+    this.user,
+    this.isLoading = false,
+    this.error,
+  });
+
+  AuthState copyWith({
+    UserModel? user,
+    bool? isLoading,
+    String? error,
+  }) {
+    return AuthState(
+      user: user ?? this.user,
+      isLoading: isLoading ?? this.isLoading,
+      error: error ?? this.error,
+    );
+  }
+}
+
+class AuthController extends Notifier<AuthState> {
   @override
-  Future<void> build() async {
-    // Initial state is data with no loading/error
-    return;
+  AuthState build() {
+    return AuthState();
+  }
+
+  Future<void> signIn({
+    required String email,
+    required String password,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final authService = ref.read(authServiceProvider);
+      final user = await authService.signIn(
+        email: email,
+        password: password,
+      );
+      state = state.copyWith(user: user, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      rethrow;
+    }
   }
 
   Future<void> signUp({
@@ -42,62 +86,30 @@ class AuthController extends AsyncNotifier<void> {
     required String password,
     required String displayName,
   }) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
       final authService = ref.read(authServiceProvider);
-      await authService.signUp(
+      final user = await authService.signUp(
         email: email,
         password: password,
         displayName: displayName,
       );
-    });
-  }
-
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      final authService = ref.read(authServiceProvider);
-      await authService.signIn(
-        email: email,
-        password: password,
-      );
-    });
+      state = state.copyWith(user: user, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
+    state = state.copyWith(isLoading: true);
+    try {
       final authService = ref.read(authServiceProvider);
       await authService.signOut();
-    });
+      state = AuthState();
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      rethrow;
+    }
   }
-}
-
-// Auth Controller Provider
-final authControllerProvider = AsyncNotifierProvider<AuthController, void>(() {
-  return AuthController();
-});
-
-// Update profile provider
-final updateProfileProvider = FutureProvider.family<void, UpdateProfileParams>((ref, params) async {
-  final authService = ref.watch(authServiceProvider);
-  await authService.updateUserProfile(
-    displayName: params.displayName,
-    photoURL: params.photoURL,
-  );
-  ref.invalidate(currentUserStreamProvider);
-});
-
-// Parameter classes
-class UpdateProfileParams {
-  final String displayName;
-  final String? photoURL;
-
-  UpdateProfileParams({
-    required this.displayName,
-    this.photoURL,
-  });
 }

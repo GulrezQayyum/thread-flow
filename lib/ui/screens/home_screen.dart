@@ -32,7 +32,8 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     TextButton(
                       onPressed: () {
-                        ref.read(authServiceProvider).signOut();
+                        // FIX: Use authControllerProvider instead of authServiceProvider
+                        ref.read(authControllerProvider.notifier).signOut();
                         Navigator.pop(context);
                       },
                       child: const Text('Sign Out'),
@@ -50,7 +51,6 @@ class HomeScreen extends ConsumerWidget {
             return const Center(child: Text('Not logged in'));
           }
           
-          // ✅ Pass the user ID to ChatList
           return ChatList(userId: user.uid);
         },
         loading: () => const Center(child: CircularProgressIndicator()),

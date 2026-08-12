@@ -1,32 +1,76 @@
+// lib/providers/storage_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
-import '../services/storage_service.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/cloudinary_storage_service.dart';
 import 'service_providers.dart';
 
-// Storage service provider
-final storageServiceProvider = Provider((ref) => StorageService());
+// Cloudinary service provider
+final cloudinaryServiceProvider = Provider((ref) => CloudinaryStorageService());
+
+// ==================== IMAGE PICKERS ====================
 
 // Pick image from gallery
 final pickImageProvider = FutureProvider<File?>((ref) async {
-  final storageService = ref.watch(storageServiceProvider);
-  return storageService.pickImage();
+  try {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 70,
+    );
+    
+    if (image == null) return null;
+    print('📷 Image picked from gallery');
+    return File(image.path);
+  } catch (e) {
+    print('❌ Pick image error: $e');
+    return null;
+  }
 });
 
 // Pick image from camera
 final pickImageFromCameraProvider = FutureProvider<File?>((ref) async {
-  final storageService = ref.watch(storageServiceProvider);
-  return storageService.pickImageFromCamera();
+  try {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 70,
+    );
+    
+    if (image == null) return null;
+    print('📷 Image picked from camera');
+    return File(image.path);
+  } catch (e) {
+    print('❌ Pick camera error: $e');
+    return null;
+  }
 });
 
-// Upload image to storage
+// ==================== IMAGE UPLOAD ====================
+
+// Upload image to Cloudinary
 final uploadImageProvider = FutureProvider.family<String, UploadImageParams>((ref, params) async {
-  final storageService = ref.watch(storageServiceProvider);
-  return storageService.uploadChatImage(
+  final cloudinary = ref.watch(cloudinaryServiceProvider);
+  return cloudinary.uploadChatImage(
     chatId: params.chatId,
     messageId: params.messageId,
-    imageFile: params.imageFile,
+    imageFile: XFile(params.imageFile.path),
   );
 });
+
+// ==================== IMAGE DATA (For Firestore stored images) ====================
+
+// Get image from Firestore (if using base64 storage) - ADD THIS
+final getImageProvider = FutureProvider.family<String?, GetImageParams>((ref, params) async {
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  return firestoreService.getImageData(params.chatId, params.messageId);
+});
+
+// ==================== PARAMETER CLASSES ====================
 
 class UploadImageParams {
   final String chatId;
@@ -39,12 +83,6 @@ class UploadImageParams {
     required this.imageFile,
   });
 }
-
-// Get image from Firestore (if using Firestore for images)
-final getImageProvider = FutureProvider.family<String?, GetImageParams>((ref, params) async {
-  final firestoreService = ref.watch(firestoreServiceProvider);
-  return firestoreService.getImageData(params.chatId, params.messageId);
-});
 
 class GetImageParams {
   final String chatId;

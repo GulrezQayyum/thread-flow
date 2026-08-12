@@ -77,7 +77,9 @@ class _CreateThreadDialogState extends ConsumerState<CreateThreadDialog> {
     setState(() => _isLoading = true);
     
     try {
-      final currentUser = ref.read(currentUserProvider).value;
+      // FIX: currentUserProvider returns UserModel? directly, not .value
+      final currentUser = ref.read(currentUserProvider);
+      
       if (currentUser == null) {
         throw Exception('User not logged in');
       }
@@ -89,31 +91,35 @@ class _CreateThreadDialogState extends ConsumerState<CreateThreadDialog> {
         sendMessageProvider(
           SendMessageParams(
             chatId: widget.chatId,
-            senderId: currentUser.uid, // Make sure this is 'uid' not 'id'
+            senderId: currentUser.uid,
             text: text,
             mediaUrl: null,
             threadId: threadId,
-            isThreadStart: true, // Now this parameter exists!
+            isThreadStart: true,
           ),
         ).future,
       );
 
       widget.onThreadCreated(threadId);
-      Navigator.pop(context);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Thread created successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Thread created successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error creating thread: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating thread: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

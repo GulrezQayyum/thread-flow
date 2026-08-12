@@ -116,9 +116,9 @@ class MessageBubble extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Media (image)
+                  // Media (image) - Simplified
                   if (message.mediaUrl != null)
-                    _buildImageContent(context, ref),
+                    _buildImageContent(context),
                   
                   // Text
                   if (message.text.isNotEmpty && message.text != '📷 Image')
@@ -252,76 +252,15 @@ class MessageBubble extends ConsumerWidget {
     return grouped;
   }
 
-  // ==================== IMAGE CONTENT ====================
+  // ==================== IMAGE CONTENT (Simplified - No Firestore) ====================
 
-  Widget _buildImageContent(BuildContext context, WidgetRef ref) {
+  Widget _buildImageContent(BuildContext context) {
     final mediaUrl = message.mediaUrl!;
     
-    if (mediaUrl.startsWith('firestore://')) {
-      return _buildFirestoreImage(context, ref);
-    } else {
-      return _buildNetworkImage(mediaUrl);
-    }
-  }
-
-  Widget _buildFirestoreImage(BuildContext context, WidgetRef ref) {
-    try {
-      final parts = message.mediaUrl!.replaceFirst('firestore://', '').split('/');
-      if (parts.length < 3) {
-        return _buildImagePlaceholder();
-      }
-      
-      final chatId = parts[0];
-      final messageId = parts[2];
-      
-      final imageDataAsync = ref.watch(
-        getImageProvider(
-          GetImageParams(chatId: chatId, messageId: messageId),
-        )
-      );
-      
-      return imageDataAsync.when(
-        data: (base64Data) {
-          if (base64Data != null) {
-            try {
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.memory(
-                  base64Decode(base64Data),
-                  height: 200,
-                  width: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return _buildImagePlaceholder();
-                  },
-                ),
-              );
-            } catch (e) {
-              return _buildImagePlaceholder();
-            }
-          }
-          return _buildImagePlaceholder();
-        },
-        loading: () => Container(
-          height: 200,
-          width: 200,
-          color: Colors.grey[200],
-          child: const Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
-        error: (error, stack) => _buildImagePlaceholder(),
-      );
-    } catch (e) {
-      return _buildImagePlaceholder();
-    }
-  }
-
-  Widget _buildNetworkImage(String url) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Image.network(
-        url,
+        mediaUrl,
         height: 200,
         width: 200,
         fit: BoxFit.cover,
@@ -342,24 +281,20 @@ class MessageBubble extends ConsumerWidget {
           );
         },
         errorBuilder: (context, error, stackTrace) {
-          return _buildImagePlaceholder();
+          return Container(
+            height: 150,
+            width: 200,
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.broken_image,
+              size: 50,
+              color: Colors.grey,
+            ),
+          );
         },
-      ),
-    );
-  }
-
-  Widget _buildImagePlaceholder() {
-    return Container(
-      height: 150,
-      width: 200,
-      decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(
-        Icons.broken_image,
-        size: 50,
-        color: Colors.grey,
       ),
     );
   }

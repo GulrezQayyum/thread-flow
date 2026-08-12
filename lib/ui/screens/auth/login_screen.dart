@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import '../../../providers/auth_provider.dart';
+import 'direct_reset_password_screen.dart';
 
 class LoginScreen extends HookConsumerWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -78,15 +79,17 @@ class LoginScreen extends HookConsumerWidget {
               ),
               const SizedBox(height: 8),
               // Forgot Password Link
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    // TODO: Navigate to forgot password screen
-                  },
-                  child: const Text('Forgot password?'),
-                ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const DirectResetPasswordScreen(),
+                    ),
+                  );
+                },
+                child: const Text('Forgot password?'),
               ),
+
               const SizedBox(height: 24),
               // Error Message
               if (errorMessage.value != null)
