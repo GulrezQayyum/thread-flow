@@ -1,3 +1,4 @@
+// lib/ui/screens/chat_screen.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -8,12 +9,14 @@ import '../../providers/auth_provider.dart';
 import '../../providers/message_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/storage_provider.dart';
+import '../../providers/ai_provider.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_input.dart';
 import '../widgets/chat_info_sheet.dart';
 import '../widgets/thread_sheet.dart';
 import '../widgets/create_thread_dialog.dart';
 import '../widgets/add_contact_dialog.dart';
+import '../widgets/summary_banner.dart';
 
 class ChatScreen extends HookConsumerWidget {
   final String chatId;
@@ -57,6 +60,22 @@ class ChatScreen extends HookConsumerWidget {
       ),
       body: Column(
         children: [
+          // AI Summary Banner - Only shown once with a unique key
+          Consumer(
+            builder: (context, ref, _) {
+              final messages = messagesAsync.value;
+              if (messages != null && messages.length >= 3) {
+                // Use a unique key based on chatId to prevent recreation
+                return SummaryBanner(
+                  key: ValueKey('summary_${chatId}_${messages.length}'),
+                  chatId: chatId,
+                  messages: messages,
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+
           // Messages list
           Expanded(
             child: messagesAsync.when(
@@ -129,6 +148,7 @@ class ChatScreen extends HookConsumerWidget {
               },
             ),
           ),
+
           // Message input
           MessageInput(
             controller: messageInputController,
@@ -224,6 +244,28 @@ class ChatScreen extends HookConsumerWidget {
       ),
       elevation: 1,
       actions: [
+        // AI Status Indicator
+        Consumer(
+          builder: (context, ref, _) {
+            final isConfigured = ref.watch(groqConfiguredProvider);
+            return Tooltip(
+              message: isConfigured ? 'AI Features Ready' : 'AI Not Configured',
+              child: Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isConfigured ? Colors.green[100] : Colors.grey[300],
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.auto_awesome,
+                  size: 20,
+                  color: isConfigured ? Colors.green[700] : Colors.grey[600],
+                ),
+              ),
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.search),
           onPressed: () =>
@@ -532,7 +574,6 @@ class ChatScreen extends HookConsumerWidget {
     String messageId,
     String reaction,
   ) async {
-    // Get current user - FIXED: Use currentUserAsync.value
     final currentUser = ref.read(currentUserStreamProvider).value;
     
     if (currentUser == null) {
@@ -541,7 +582,6 @@ class ChatScreen extends HookConsumerWidget {
     }
 
     try {
-      // Toggle reaction using the provider
       await ref.read(
         toggleReactionProvider(
           ToggleReactionParams(
@@ -553,7 +593,6 @@ class ChatScreen extends HookConsumerWidget {
         ).future,
       );
       
-      // Show brief feedback (like WhatsApp)
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

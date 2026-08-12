@@ -1,23 +1,22 @@
-// lib/providers/message_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/message_model.dart';
-import 'service_providers.dart';
+import 'service_providers.dart'; // ← IMPORT THIS (contains firestoreServiceProvider)
 
 // Get messages for a chat
 final chatMessagesProvider = StreamProvider.family<List<MessageModel>, String>((ref, chatId) {
-  final firestoreService = ref.watch(firestoreServiceProvider);
+  final firestoreService = ref.watch(firestoreServiceProvider); // ← ADD THIS
   return firestoreService.watchMessages(chatId);
 });
 
 // Get messages in a specific thread
 final threadMessagesProvider = StreamProvider.family<List<MessageModel>, ThreadMessageParams>((ref, params) {
-  final firestoreService = ref.watch(firestoreServiceProvider);
+  final firestoreService = ref.watch(firestoreServiceProvider); // ← ADD THIS
   return firestoreService.watchThreadMessages(params.chatId, params.threadId);
 });
 
-// Send a message - FIXED
+// Send a message
 final sendMessageProvider = FutureProvider.family<MessageModel, SendMessageParams>((ref, params) async {
-  final firestoreService = ref.watch(firestoreServiceProvider);
+  final firestoreService = ref.watch(firestoreServiceProvider); // ← ADD THIS
   
   print('📤 SEND MESSAGE: ChatId: ${params.chatId}');
   print('📤 SEND MESSAGE: SenderId: ${params.senderId}');
@@ -36,7 +35,6 @@ final sendMessageProvider = FutureProvider.family<MessageModel, SendMessageParam
     
     print('✅ MESSAGE SENT: ${message.id}');
     
-    // Invalidate messages to refresh
     ref.invalidate(chatMessagesProvider(params.chatId));
     if (params.threadId != null) {
       ref.invalidate(threadMessagesProvider(
@@ -53,26 +51,26 @@ final sendMessageProvider = FutureProvider.family<MessageModel, SendMessageParam
 
 // Generate summary for a thread
 final generateThreadSummaryProvider = FutureProvider.family<String, GenerateSummaryParams>((ref, params) async {
-  final groqService = ref.watch(groqServiceProvider);
+  final groqService = ref.watch(groqServiceProvider); // ← ADD THIS
   return groqService.generateThreadSummary(params.messages);
 });
 
 // Generate title for a thread
-final generateThreadTitleProvider = FutureProvider.family<String, String>((ref, firstMessage) async {
-  final groqService = ref.watch(groqServiceProvider);
-  return groqService.generateThreadTitle(firstMessage);
+final generateThreadTitleProvider = FutureProvider.family<String, GenerateTitleParams>((ref, params) async {
+  final groqService = ref.watch(groqServiceProvider); // ← ADD THIS
+  return groqService.generateThreadTitle(params.messages);
 });
 
 // Delete a message
 final deleteMessageProvider = FutureProvider.family<void, DeleteMessageParams>((ref, params) async {
-  final firestoreService = ref.watch(firestoreServiceProvider);
+  final firestoreService = ref.watch(firestoreServiceProvider); // ← ADD THIS
   await firestoreService.deleteMessage(params.chatId, params.messageId);
   ref.invalidate(chatMessagesProvider(params.chatId));
 });
 
 // Search messages in a chat
 final searchMessagesProvider = FutureProvider.family<List<MessageModel>, SearchParams>((ref, params) async {
-  final firestoreService = ref.watch(firestoreServiceProvider);
+  final firestoreService = ref.watch(firestoreServiceProvider); // ← ADD THIS
   return firestoreService.searchMessages(params.chatId, params.query);
 });
 
@@ -108,8 +106,22 @@ class SendMessageParams {
 
 class GenerateSummaryParams {
   final List<MessageModel> messages;
+  final String? chatId;
+  final String? threadId;
 
-  GenerateSummaryParams({required this.messages});
+  GenerateSummaryParams({
+    required this.messages,
+    this.chatId,
+    this.threadId,
+  });
+}
+
+class GenerateTitleParams {
+  final List<MessageModel> messages;
+
+  GenerateTitleParams({
+    required this.messages,
+  });
 }
 
 class DeleteMessageParams {
@@ -134,27 +146,23 @@ class SearchParams {
 
 // Toggle reaction on a message
 final toggleReactionProvider = FutureProvider.family<void, ToggleReactionParams>((ref, params) async {
-  final firestoreService = ref.watch(firestoreServiceProvider);
+  final firestoreService = ref.watch(firestoreServiceProvider); // ← ADD THIS
   
-  // Get current message
   final messageDoc = await firestoreService.getChatMessage(params.chatId, params.messageId);
   if (messageDoc == null) return;
   
   final currentReactions = List<String>.from(messageDoc['reactions'] ?? []);
   final userId = params.userId;
   
-  // Check if user already reacted with this emoji
   final userReactionIndex = currentReactions.indexWhere((r) => r == params.reaction);
   
   if (userReactionIndex != -1) {
-    // Remove reaction (toggle off)
     await firestoreService.removeReaction(
       chatId: params.chatId,
       messageId: params.messageId,
       reaction: params.reaction,
     );
   } else {
-    // Add reaction
     await firestoreService.addReaction(
       chatId: params.chatId,
       messageId: params.messageId,
@@ -162,7 +170,6 @@ final toggleReactionProvider = FutureProvider.family<void, ToggleReactionParams>
     );
   }
   
-  // Invalidate to refresh
   ref.invalidate(chatMessagesProvider(params.chatId));
 });
 
