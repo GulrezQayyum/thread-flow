@@ -1,3 +1,4 @@
+// lib/services/firestore_service.dart
 import 'dart:io';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,6 +14,7 @@ class FirestoreService {
 
   // ==================== CHAT OPERATIONS ====================
 
+  /// Create a new chat
   Future<ChatModel> createChat({
     required String name,
     required List<String> members,
@@ -40,6 +42,7 @@ class FirestoreService {
     }
   }
 
+  /// Get chat by ID
   Future<ChatModel?> getChat(String chatId) async {
     try {
       final doc = await _firestore.collection('chats').doc(chatId).get();
@@ -50,6 +53,7 @@ class FirestoreService {
     }
   }
 
+  /// Watch chat in real-time
   Stream<ChatModel?> watchChat(String chatId) {
     return _firestore.collection('chats').doc(chatId).snapshots().map((doc) {
       if (!doc.exists) return null;
@@ -57,6 +61,7 @@ class FirestoreService {
     });
   }
 
+  /// Get all chats for a user
   Future<List<ChatModel>> getUserChats(String userId) async {
     try {
       final snapshot = await _firestore
@@ -73,6 +78,7 @@ class FirestoreService {
     }
   }
 
+  /// Watch all chats for a user (real-time)
   Stream<List<ChatModel>> watchUserChats(String userId) {
     return _firestore
         .collection('chats')
@@ -85,6 +91,7 @@ class FirestoreService {
         });
   }
 
+  /// Update chat last message
   Future<void> updateChatLastMessage({
     required String chatId,
     required String message,
@@ -101,6 +108,7 @@ class FirestoreService {
     }
   }
 
+  /// Update chat summary
   Future<void> updateChatSummary(String chatId, String summary) async {
     try {
       await _firestore.collection('chats').doc(chatId).update({
@@ -111,6 +119,7 @@ class FirestoreService {
     }
   }
 
+  /// Update chat photo
   Future<void> updateChatPhoto(String chatId, String photoURL) async {
     try {
       await _firestore.collection('chats').doc(chatId).update({
@@ -118,6 +127,47 @@ class FirestoreService {
       });
     } catch (e) {
       throw Exception('Failed to update chat photo: $e');
+    }
+  }
+
+  /// Update chat name
+  Future<void> updateChatName(String chatId, String newName) async {
+    try {
+      await _firestore.collection('chats').doc(chatId).update({
+        'name': newName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update chat name: $e');
+    }
+  }
+
+  /// Delete chat document and all its data
+  Future<void> deleteChat(String chatId) async {
+    try {
+      print('🗑️ Deleting chat: $chatId');
+      await _firestore.collection('chats').doc(chatId).delete();
+      print('✅ Chat deleted');
+    } catch (e) {
+      print('❌ Failed to delete chat: $e');
+      throw Exception('Failed to delete chat: $e');
+    }
+  }
+
+  /// Remove chat from user's list
+  Future<void> removeChatFromUserList({
+    required String userId,
+    required String chatId,
+  }) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('chats')
+          .doc(chatId)
+          .delete();
+    } catch (e) {
+      print('❌ Failed to remove chat from user list: $e');
     }
   }
 
@@ -181,7 +231,7 @@ class FirestoreService {
     }
   }
 
-  /// Watch threads in a chat (real-time) - ADD THIS METHOD
+  /// Watch threads in a chat (real-time)
   Stream<List<ThreadModel>> watchThreads(String chatId) {
     return _firestore
         .collection('chats')
@@ -225,8 +275,9 @@ class FirestoreService {
     }
   }
 
-  // ==================== ADD USER TO CHAT ====================
+  // ==================== MEMBER OPERATIONS ====================
 
+  /// Add user to chat
   Future<void> addUserToChat({
     required String chatId,
     required String userId,
@@ -234,7 +285,6 @@ class FirestoreService {
     try {
       print('📤 Adding user $userId to chat $chatId');
 
-      // Check if chat exists
       final chatDoc = await _firestore.collection('chats').doc(chatId).get();
       if (!chatDoc.exists) {
         print('❌ Chat does not exist');
@@ -254,35 +304,58 @@ class FirestoreService {
         return;
       }
 
-      // Add user to chat members
       await _firestore.collection('chats').doc(chatId).update({
         'members': FieldValue.arrayUnion([userId]),
       });
       print('✅ User added to chat members');
 
-      // Try to add chat to user's list (optional)
       try {
         await _firestore
             .collection('users')
             .doc(userId)
             .collection('chats')
             .doc(chatId)
-            .set({'chatId': chatId, 'addedAt': FieldValue.serverTimestamp()});
+            .set({
+              'chatId': chatId,
+              'addedAt': FieldValue.serverTimestamp(),
+            });
         print('✅ Chat added to user\'s list');
       } catch (e) {
-        // This is optional - user is already added to chat
         print('ℹ️ User list update skipped (optional): $e');
       }
 
       print('✅ User $userId added successfully!');
     } catch (e) {
-      // Log but don't throw - the operation likely succeeded
       print('⚠️ Add user completed with warning: $e');
+    }
+  }
+
+  /// Remove user from chat
+  Future<void> removeUserFromChat({
+    required String chatId,
+    required String userId,
+  }) async {
+    try {
+      final chatRef = _firestore.collection('chats').doc(chatId);
+
+      await chatRef.update({
+        'members': FieldValue.arrayRemove([userId]),
+      });
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('chats')
+          .doc(chatId)
+          .delete();
+    } catch (e) {
+      throw Exception('Failed to remove user from chat: $e');
     }
   }
 
   // ==================== MESSAGE OPERATIONS ====================
 
+  /// Send a message
   Future<MessageModel> sendMessage({
     required String chatId,
     required String senderId,
@@ -331,6 +404,7 @@ class FirestoreService {
     }
   }
 
+  /// Get messages for a chat
   Future<List<MessageModel>> getMessages(
     String chatId, {
     int limit = 50,
@@ -354,6 +428,7 @@ class FirestoreService {
     }
   }
 
+  /// Watch messages for a chat (real-time)
   Stream<List<MessageModel>> watchMessages(String chatId) {
     return _firestore
         .collection('chats')
@@ -368,6 +443,7 @@ class FirestoreService {
         });
   }
 
+  /// Get messages in a thread
   Future<List<MessageModel>> getThreadMessages(
     String chatId,
     String threadId,
@@ -389,6 +465,7 @@ class FirestoreService {
     }
   }
 
+  /// Watch thread messages (real-time)
   Stream<List<MessageModel>> watchThreadMessages(
     String chatId,
     String threadId,
@@ -407,6 +484,7 @@ class FirestoreService {
         });
   }
 
+  /// Delete a message
   Future<void> deleteMessage(String chatId, String messageId) async {
     try {
       await _firestore
@@ -420,6 +498,7 @@ class FirestoreService {
     }
   }
 
+  /// Get a single chat message
   Future<Map<String, dynamic>?> getChatMessage(
     String chatId,
     String messageId,
@@ -440,6 +519,9 @@ class FirestoreService {
     }
   }
 
+  // ==================== REACTION OPERATIONS ====================
+
+  /// Add reaction to a message
   Future<void> addReaction({
     required String chatId,
     required String messageId,
@@ -459,6 +541,7 @@ class FirestoreService {
     }
   }
 
+  /// Remove reaction from a message
   Future<void> removeReaction({
     required String chatId,
     required String messageId,
@@ -478,8 +561,66 @@ class FirestoreService {
     }
   }
 
+  // ==================== DELETE ALL MESSAGES ====================
+
+  /// Delete all messages in a chat (including images and threads)
+  Future<void> deleteAllMessages(String chatId) async {
+    try {
+      // Delete messages
+      final messagesSnapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .get();
+
+      final batch = _firestore.batch();
+      for (var doc in messagesSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      // Delete images subcollection
+      final imagesSnapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('images')
+          .get();
+
+      final imageBatch = _firestore.batch();
+      for (var doc in imagesSnapshot.docs) {
+        imageBatch.delete(doc.reference);
+      }
+      await imageBatch.commit();
+
+      // Delete threads subcollection
+      final threadsSnapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('threads')
+          .get();
+
+      final threadBatch = _firestore.batch();
+      for (var doc in threadsSnapshot.docs) {
+        threadBatch.delete(doc.reference);
+      }
+      await threadBatch.commit();
+
+      // Update chat
+      await _firestore.collection('chats').doc(chatId).update({
+        'lastMessageAt': null,
+        'lastMessage': null,
+      });
+
+      print('✅ All messages deleted from chat: $chatId');
+    } catch (e) {
+      print('❌ Failed to delete all messages: $e');
+      throw Exception('Failed to delete all messages: $e');
+    }
+  }
+
   // ==================== USER OPERATIONS ====================
 
+  /// Get a single user
   Future<UserModel?> getUser(String userId) async {
     try {
       final doc = await _firestore.collection('users').doc(userId).get();
@@ -490,6 +631,7 @@ class FirestoreService {
     }
   }
 
+  /// Watch a single user (real-time)
   Stream<UserModel?> watchUser(String userId) {
     return _firestore.collection('users').doc(userId).snapshots().map((doc) {
       if (!doc.exists) return null;
@@ -497,6 +639,7 @@ class FirestoreService {
     });
   }
 
+  /// Get multiple users
   Future<List<UserModel>> getUsers(List<String> userIds) async {
     try {
       if (userIds.isEmpty) return [];
@@ -514,6 +657,7 @@ class FirestoreService {
     }
   }
 
+  /// Search users by email
   Future<List<UserModel>> searchUsersByEmail(String email) async {
     try {
       final snapshot = await _firestore
@@ -529,6 +673,7 @@ class FirestoreService {
     }
   }
 
+  /// Search users by display name
   Future<List<UserModel>> searchUsersByName(String name) async {
     try {
       final snapshot = await _firestore
@@ -545,6 +690,7 @@ class FirestoreService {
     }
   }
 
+  /// Create or update user
   Future<void> setUser(UserModel user) async {
     try {
       await _firestore.collection('users').doc(user.uid).set(user.toJson());
@@ -553,6 +699,7 @@ class FirestoreService {
     }
   }
 
+  /// Update user last seen
   Future<void> updateUserLastSeen(String userId) async {
     try {
       await _firestore.collection('users').doc(userId).update({
@@ -563,32 +710,9 @@ class FirestoreService {
     }
   }
 
-  // ==================== REMOVE USER FROM CHAT ====================
+  // ==================== IMAGE OPERATIONS (Firestore Base64) ====================
 
-  Future<void> removeUserFromChat({
-    required String chatId,
-    required String userId,
-  }) async {
-    try {
-      final chatRef = _firestore.collection('chats').doc(chatId);
-
-      await chatRef.update({
-        'members': FieldValue.arrayRemove([userId]),
-      });
-
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('chats')
-          .doc(chatId)
-          .delete();
-    } catch (e) {
-      throw Exception('Failed to remove user from chat: $e');
-    }
-  }
-
-  // ==================== IMAGE OPERATIONS ====================
-
+  /// Upload image to Firestore (base64 encoded)
   Future<String> uploadChatImage({
     required String chatId,
     required String messageId,
@@ -660,6 +784,7 @@ class FirestoreService {
     }
   }
 
+  /// Get image from Firestore by reference
   Future<String?> getImageData(String chatId, String messageId) async {
     try {
       final doc = await _firestore
@@ -679,6 +804,7 @@ class FirestoreService {
     }
   }
 
+  /// Delete image from Firestore
   Future<void> deleteImage(String chatId, String messageId) async {
     try {
       await _firestore
@@ -694,6 +820,7 @@ class FirestoreService {
 
   // ==================== SEARCH OPERATIONS ====================
 
+  /// Search messages in a chat
   Future<List<MessageModel>> searchMessages(String chatId, String query) async {
     try {
       final snapshot = await _firestore
@@ -713,6 +840,7 @@ class FirestoreService {
     }
   }
 
+  /// Get recent messages
   Future<List<MessageModel>> getRecentMessages(
     String chatId, {
     int limit = 20,
@@ -736,26 +864,13 @@ class FirestoreService {
 
   // ==================== BATCH OPERATIONS ====================
 
-  Future<void> deleteAllMessages(String chatId) async {
+  /// Delete all messages in a chat (admin only)
+  Future<void> deleteAllChatData(String chatId) async {
     try {
-      final snapshot = await _firestore
-          .collection('chats')
-          .doc(chatId)
-          .collection('messages')
-          .get();
-
-      final batch = _firestore.batch();
-      for (var doc in snapshot.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-
-      await _firestore.collection('chats').doc(chatId).update({
-        'lastMessageAt': null,
-        'lastMessage': null,
-      });
+      await deleteAllMessages(chatId);
+      await deleteChat(chatId);
     } catch (e) {
-      throw Exception('Failed to delete all messages: $e');
+      throw Exception('Failed to delete all chat data: $e');
     }
   }
 }

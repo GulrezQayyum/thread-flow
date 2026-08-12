@@ -22,11 +22,7 @@ class ChatScreen extends HookConsumerWidget {
   final String chatId;
   final ChatModel chat;
 
-  const ChatScreen({
-    super.key,
-    required this.chatId,
-    required this.chat,
-  });
+  const ChatScreen({super.key, required this.chatId, required this.chat});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,12 +56,11 @@ class ChatScreen extends HookConsumerWidget {
       ),
       body: Column(
         children: [
-          // AI Summary Banner - Only shown once with a unique key
+          // AI Summary Banner
           Consumer(
             builder: (context, ref, _) {
               final messages = messagesAsync.value;
               if (messages != null && messages.length >= 3) {
-                // Use a unique key based on chatId to prevent recreation
                 return SummaryBanner(
                   key: ValueKey('summary_${chatId}_${messages.length}'),
                   chatId: chatId,
@@ -519,7 +514,8 @@ class ChatScreen extends HookConsumerWidget {
 
     isUploadingMedia.value = true;
     try {
-      final threadId = selectedThreadId.value ?? 
+      final threadId =
+          selectedThreadId.value ??
           DateTime.now().millisecondsSinceEpoch.toString();
       final isNewThread = selectedThreadId.value == null;
 
@@ -551,7 +547,7 @@ class ChatScreen extends HookConsumerWidget {
       if (isNewThread) {
         selectedThreadId.value = threadId;
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Image sent!'),
@@ -575,7 +571,7 @@ class ChatScreen extends HookConsumerWidget {
     String reaction,
   ) async {
     final currentUser = ref.read(currentUserStreamProvider).value;
-    
+
     if (currentUser == null) {
       _showErrorSnackBar(context, 'Please login to add reactions');
       return;
@@ -592,7 +588,7 @@ class ChatScreen extends HookConsumerWidget {
           ),
         ).future,
       );
-      
+
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -742,14 +738,21 @@ class ChatScreen extends HookConsumerWidget {
     );
   }
 
-  void _showChatInfo(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  // ==================== CHAT INFO ====================
+
+ void _showChatInfo(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    isScrollControlled: true,
+    builder: (context) => Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      isScrollControlled: true,
-      builder: (context) => ChatInfoSheet(chat: chat),
-    );
-  }
+      child: ChatInfoSheet(chat: chat),
+    ),
+  );
+}
 }
