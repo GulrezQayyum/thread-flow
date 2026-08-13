@@ -12,13 +12,11 @@ A modern, feature-rich chat application built with Flutter that combines real-ti
 - [Configuration](#-configuration)
 - [Project Structure](#-project-structure)
 - [Key Features Explained](#-key-features-explained)
-- [Screenshots](#-screenshots)
 - [Contributing](#-contributing)
 - [Security](#-security)
 - [License](#-license)
 - [Acknowledgments](#-acknowledgments)
-- [Support](#-support)
-
+  
 ---
 
 ## 🚀 Overview
@@ -324,32 +322,6 @@ await toggleReaction(messageId, userId, '❤️');
 
 ---
 
-## 📱 Screenshots
-
-> Add your screenshots here by uploading them to the repo (e.g., `assets/screenshots/`) and referencing them like this:
-
-```md
-### Authentication Flow
-
-| Login | Signup | Forgot Password |
-|-------|--------|-----------------|
-|  |  |  |
-
-### Main Features
-
-| Chat List | Chat Screen | Threads |
-|-----------|-------------|---------|
-|  |  |  |
-
-### AI Features
-
-| Summary Banner | Sentiment | Profile |
-|----------------|-----------|---------|
-|  |  |  |
-```
-
----
-
 ## 🤝 Contributing
 
 1. Fork the repository  
@@ -405,12 +377,6 @@ This project is licensed under the MIT License – see the [LICENSE](LICENSE) fi
 - [Groq](https://groq.com/) – AI API  
 - [Cloudinary](https://cloudinary.com/) – Image hosting  
 - [Riverpod](https://riverpod.dev/) – State management  
-
----
-
-## 📞 Support
-
-For support, email [support@threadflow.com](mailto:support@threadflow.com) or open an issue in the GitHub repository.
 
 ---
 
