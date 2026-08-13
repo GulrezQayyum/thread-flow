@@ -154,23 +154,6 @@ class FirestoreService {
     }
   }
 
-  /// Remove chat from user's list
-  Future<void> removeChatFromUserList({
-    required String userId,
-    required String chatId,
-  }) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('chats')
-          .doc(chatId)
-          .delete();
-    } catch (e) {
-      print('❌ Failed to remove chat from user list: $e');
-    }
-  }
-
   // ==================== THREAD OPERATIONS ====================
 
   /// Get thread summary
@@ -315,10 +298,7 @@ class FirestoreService {
             .doc(userId)
             .collection('chats')
             .doc(chatId)
-            .set({
-              'chatId': chatId,
-              'addedAt': FieldValue.serverTimestamp(),
-            });
+            .set({'chatId': chatId, 'addedAt': FieldValue.serverTimestamp()});
         print('✅ Chat added to user\'s list');
       } catch (e) {
         print('ℹ️ User list update skipped (optional): $e');
@@ -330,17 +310,45 @@ class FirestoreService {
     }
   }
 
+  // lib/services/firestore_service.dart
+  // Update the removeUserFromChat method
+
   /// Remove user from chat
   Future<void> removeUserFromChat({
     required String chatId,
     required String userId,
   }) async {
     try {
+      print('👤 Removing user $userId from chat $chatId');
+
       final chatRef = _firestore.collection('chats').doc(chatId);
 
+      // First check if chat exists
+      final chatDoc = await chatRef.get();
+      if (!chatDoc.exists) {
+        print('❌ Chat does not exist');
+        return;
+      }
+
+      // Remove user from members array
       await chatRef.update({
         'members': FieldValue.arrayRemove([userId]),
       });
+
+      print('✅ User $userId removed from chat members');
+    } catch (e) {
+      print('❌ Failed to remove user from chat: $e');
+      throw Exception('Failed to remove user from chat: $e');
+    }
+  }
+
+  /// Remove chat from user's list
+  Future<void> removeChatFromUserList({
+    required String userId,
+    required String chatId,
+  }) async {
+    try {
+      print('🗑️ Removing chat $chatId from user $userId list');
 
       await _firestore
           .collection('users')
@@ -348,8 +356,11 @@ class FirestoreService {
           .collection('chats')
           .doc(chatId)
           .delete();
+
+      print('✅ Chat removed from user list');
     } catch (e) {
-      throw Exception('Failed to remove user from chat: $e');
+      print('❌ Failed to remove chat from user list: $e');
+      // Don't throw - this is optional
     }
   }
 
@@ -563,9 +574,10 @@ class FirestoreService {
 
   // ==================== DELETE ALL MESSAGES ====================
 
-  /// Delete all messages in a chat (including images and threads)
   Future<void> deleteAllMessages(String chatId) async {
     try {
+      print('🗑️ Deleting all messages for chat: $chatId');
+
       // Delete messages
       final messagesSnapshot = await _firestore
           .collection('chats')
@@ -578,8 +590,9 @@ class FirestoreService {
         batch.delete(doc.reference);
       }
       await batch.commit();
+      print('✅ Messages deleted');
 
-      // Delete images subcollection
+      // Delete images
       final imagesSnapshot = await _firestore
           .collection('chats')
           .doc(chatId)
@@ -591,8 +604,9 @@ class FirestoreService {
         imageBatch.delete(doc.reference);
       }
       await imageBatch.commit();
+      print('✅ Images deleted');
 
-      // Delete threads subcollection
+      // Delete threads
       final threadsSnapshot = await _firestore
           .collection('chats')
           .doc(chatId)
@@ -604,14 +618,14 @@ class FirestoreService {
         threadBatch.delete(doc.reference);
       }
       await threadBatch.commit();
+      print('✅ Threads deleted');
 
       // Update chat
       await _firestore.collection('chats').doc(chatId).update({
         'lastMessageAt': null,
         'lastMessage': null,
       });
-
-      print('✅ All messages deleted from chat: $chatId');
+      print('✅ Chat updated');
     } catch (e) {
       print('❌ Failed to delete all messages: $e');
       throw Exception('Failed to delete all messages: $e');
