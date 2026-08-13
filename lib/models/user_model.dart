@@ -7,6 +7,7 @@ class UserModel {
   final String? photoURL;
   final DateTime createdAt;
   final DateTime? lastSeen;
+  final bool emailVerified;
  
   UserModel({
     required this.uid,
@@ -15,6 +16,7 @@ class UserModel {
     this.photoURL,
     required this.createdAt,
     this.lastSeen,
+    this.emailVerified = false,
   });
  
   // Convert to JSON for Firestore
@@ -25,6 +27,7 @@ class UserModel {
     'photoURL': photoURL,
     'createdAt': createdAt,
     'lastSeen': lastSeen,
+    'emailVerified': emailVerified,
   };
  
   // Create from Firestore document
@@ -37,12 +40,14 @@ class UserModel {
     lastSeen: json['lastSeen'] != null 
       ? (json['lastSeen'] as Timestamp).toDate() 
       : null,
+    emailVerified: json['emailVerified'] ?? false, 
   );
  
   UserModel copyWith({
     String? displayName,
     String? photoURL,
     DateTime? lastSeen,
+    bool? emailVerified,
   }) => UserModel(
     uid: uid,
     email: email,
@@ -50,5 +55,7 @@ class UserModel {
     photoURL: photoURL ?? this.photoURL,
     createdAt: createdAt,
     lastSeen: lastSeen ?? this.lastSeen,
+    emailVerified: emailVerified ?? this.emailVerified,
+
   );
 }

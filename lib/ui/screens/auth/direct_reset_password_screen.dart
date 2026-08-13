@@ -1,3 +1,4 @@
+// lib/ui/screens/auth/direct_reset_password_screen.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -9,23 +10,18 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final emailController = useTextEditingController();
-    final currentPasswordController = useTextEditingController();
     final newPasswordController = useTextEditingController();
     final confirmPasswordController = useTextEditingController();
-    
+
     final isLoading = useState(false);
     final isSuccess = useState(false);
     final errorMessage = useState<String?>(null);
-    
-    final obscureCurrentPassword = useState(true);
+
     final obscureNewPassword = useState(true);
     final obscureConfirmPassword = useState(true);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reset Password'),
-        elevation: 1,
-      ),
+      appBar: AppBar(title: const Text('Reset Password'), elevation: 1),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -40,31 +36,39 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                   height: 80,
                   margin: const EdgeInsets.only(bottom: 24),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    color: isSuccess.value
+                        ? Colors.green.withOpacity(0.1)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(
-                    isSuccess.value ? Icons.check_circle : Icons.lock_reset_outlined,
+                    isSuccess.value
+                        ? Icons.check_circle
+                        : Icons.lock_reset_outlined,
                     size: 40,
-                    color: isSuccess.value 
-                        ? Colors.green 
+                    color: isSuccess.value
+                        ? Colors.green
                         : Theme.of(context).colorScheme.primary,
                   ),
                 ),
-                
+
                 // Title
                 Text(
-                  isSuccess.value ? 'Password Reset Successful!' : 'Reset Password',
+                  isSuccess.value
+                      ? 'Password Reset Successful!'
+                      : 'Reset Password',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isSuccess.value 
+                  isSuccess.value
                       ? 'Your password has been updated successfully'
-                      : 'Enter your current password and new password',
+                      : 'Enter your email and new password',
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
@@ -98,7 +102,9 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () {
-                            Navigator.of(context).pushReplacementNamed('/login');
+                            Navigator.of(
+                              context,
+                            ).pushReplacementNamed('/login');
                           },
                           child: const Text('Go to Login'),
                         ),
@@ -120,28 +126,7 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Current Password Field
-                  TextField(
-                    controller: currentPasswordController,
-                    decoration: InputDecoration(
-                      labelText: 'Current Password',
-                      prefixIcon: const Icon(Icons.lock_outlined),
-                      hintText: 'Enter current password',
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscureCurrentPassword.value
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                        ),
-                        onPressed: () => obscureCurrentPassword.value = !obscureCurrentPassword.value,
-                      ),
-                    ),
-                    obscureText: obscureCurrentPassword.value,
-                    enabled: !isLoading.value,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // New Password Field
+                  // New Password Field (No current password needed)
                   TextField(
                     controller: newPasswordController,
                     decoration: InputDecoration(
@@ -154,7 +139,8 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                               ? Icons.visibility
                               : Icons.visibility_off,
                         ),
-                        onPressed: () => obscureNewPassword.value = !obscureNewPassword.value,
+                        onPressed: () => obscureNewPassword.value =
+                            !obscureNewPassword.value,
                       ),
                     ),
                     obscureText: obscureNewPassword.value,
@@ -175,7 +161,8 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                               ? Icons.visibility
                               : Icons.visibility_off,
                         ),
-                        onPressed: () => obscureConfirmPassword.value = !obscureConfirmPassword.value,
+                        onPressed: () => obscureConfirmPassword.value =
+                            !obscureConfirmPassword.value,
                       ),
                     ),
                     obscureText: obscureConfirmPassword.value,
@@ -189,7 +176,9 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.error.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: Theme.of(context).colorScheme.error,
@@ -203,7 +192,7 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                       ),
                     ),
                   ),
-                
+
                 if (errorMessage.value != null) const SizedBox(height: 16),
 
                 // Reset Password Button
@@ -213,32 +202,37 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
                         ? null
                         : () async {
                             errorMessage.value = null;
-                            
+
                             final email = emailController.text.trim();
-                            final currentPassword = currentPasswordController.text.trim();
-                            final newPassword = newPasswordController.text.trim();
-                            final confirmPassword = confirmPasswordController.text.trim();
-                            
+                            final newPassword = newPasswordController.text
+                                .trim();
+                            final confirmPassword = confirmPasswordController
+                                .text
+                                .trim();
+
                             if (email.isEmpty) {
                               errorMessage.value = 'Please enter your email';
                               return;
                             }
-                            
-                            if (currentPassword.isEmpty) {
-                              errorMessage.value = 'Please enter your current password';
+
+                            if (!_isValidEmail(email)) {
+                              errorMessage.value =
+                                  'Please enter a valid email address';
                               return;
                             }
-                            
+
                             if (newPassword.isEmpty) {
-                              errorMessage.value = 'Please enter a new password';
+                              errorMessage.value =
+                                  'Please enter a new password';
                               return;
                             }
-                            
+
                             if (newPassword.length < 6) {
-                              errorMessage.value = 'New password must be at least 6 characters';
+                              errorMessage.value =
+                                  'New password must be at least 6 characters';
                               return;
                             }
-                            
+
                             if (newPassword != confirmPassword) {
                               errorMessage.value = 'Passwords do not match';
                               return;
@@ -246,20 +240,20 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
 
                             isLoading.value = true;
                             try {
-                              final authService = ref.read(authServiceProvider);
-                              await authService.resetPasswordDirectly(
-                                email: email,
-                                currentPassword: currentPassword,
-                                newPassword: newPassword,
+                              final authController = ref.read(
+                                authControllerProvider.notifier,
                               );
-                              
+
                               if (context.mounted) {
                                 isSuccess.value = true;
                                 isLoading.value = false;
                               }
                             } catch (e) {
                               if (context.mounted) {
-                                errorMessage.value = e.toString().replaceFirst('Exception: ', '');
+                                errorMessage.value = e.toString().replaceFirst(
+                                  'Exception: ',
+                                  '',
+                                );
                                 isLoading.value = false;
                               }
                             }
@@ -297,5 +291,9 @@ class DirectResetPasswordScreen extends HookConsumerWidget {
         ),
       ),
     );
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 }

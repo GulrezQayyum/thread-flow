@@ -1,3 +1,4 @@
+// lib/services/auth_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
@@ -8,8 +9,6 @@ class AuthService {
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
-
-  // ==================== EMAIL/PASSWORD AUTH ====================
 
   // Sign Up
   Future<UserModel?> signUp({
@@ -22,7 +21,7 @@ class AuthService {
         email: email,
         password: password,
       );
-      
+
       final User? firebaseUser = result.user;
       if (firebaseUser == null) return null;
 
@@ -35,9 +34,10 @@ class AuthService {
         createdAt: DateTime.now(),
       );
 
-      await _firestore.collection('users').doc(firebaseUser.uid).set(
-        userModel.toJson(),
-      );
+      await _firestore
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .set(userModel.toJson());
 
       return userModel;
     } catch (e) {
@@ -55,7 +55,7 @@ class AuthService {
         email: email,
         password: password,
       );
-      
+
       final User? firebaseUser = result.user;
       if (firebaseUser == null) return null;
 
@@ -65,65 +65,53 @@ class AuthService {
     }
   }
 
-  // Direct Password Reset - Updates password directly
-  Future<void> resetPasswordDirectly({
-    required String email,
-    required String currentPassword,
-    required String newPassword,
-  }) async {
-    try {
-      // First, sign in with current credentials to verify
-      final UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: currentPassword,
-      );
-      
-      final User? firebaseUser = result.user;
-      if (firebaseUser == null) {
-        throw Exception('User not found');
-      }
-      
-      // Update the password
-      await firebaseUser.updatePassword(newPassword);
-      
-      // Sign out after password change
-      await _auth.signOut();
-      
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password') {
-        throw Exception('Current password is incorrect');
-      } else if (e.code == 'user-not-found') {
-        throw Exception('User not found with this email');
-      } else if (e.code == 'requires-recent-login') {
-        throw Exception('Please sign in again before changing password');
-      } else {
-        throw Exception('Failed to reset password: ${e.message}');
-      }
-    } catch (e) {
-      throw Exception('Failed to reset password: $e');
-    }
-  }
-
-  // Admin Reset - Reset password without current password (requires admin access)
-  Future<void> adminResetPassword({
-    required String email,
-    required String newPassword,
-  }) async {
-    try {
-      // This requires Firebase Admin SDK - not available in client
-      // For client-side, we use the current password method above
-      throw Exception('Admin reset not available in client. Use resetPasswordDirectly.');
-    } catch (e) {
-      throw Exception('Failed to reset password: $e');
-    }
-  }
-
   // Sign Out
   Future<void> signOut() async {
     try {
       await _auth.signOut();
     } catch (e) {
       throw Exception('Sign out failed: $e');
+    }
+  }
+
+  // ==================== PASSWORD RESET METHODS ====================
+
+  /// Send password reset email
+  // Future<void> sendPasswordResetEmail({required String email}) async {
+  //   try {
+  //     await _auth.sendPasswordResetEmail(email: email);
+  //   } on FirebaseAuthException catch (e) {
+  //     if (e.code == 'user-not-found') {
+  //       throw Exception('No account found with this email');
+  //     } else if (e.code == 'invalid-email') {
+  //       throw Exception('Please enter a valid email address');
+  //     } else {
+  //       throw Exception('Failed to send reset email: ${e.message}');
+  //     }
+  //   } catch (e) {
+  //     throw Exception('Failed to send reset email: $e');
+  //   }
+  // }
+
+  /// Reset password directly (requires user to be authenticated)
+  Future<void> resetPasswordDirectly({
+    required String email,
+    required String newPassword,
+  }) async {
+    try {
+      // This sends a password reset email
+      // The user must click the link to set the new password
+      await _auth.sendPasswordResetEmail(email: email);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        throw Exception('No account found with this email');
+      } else if (e.code == 'invalid-email') {
+        throw Exception('Please enter a valid email address');
+      } else {
+        throw Exception('Failed to send reset email: ${e.message}');
+      }
+    } catch (e) {
+      throw Exception('Failed to send reset email: $e');
     }
   }
 

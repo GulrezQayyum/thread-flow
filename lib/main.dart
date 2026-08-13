@@ -11,8 +11,8 @@ import 'ui/screens/auth/signup_screen.dart';
 import 'ui/screens/auth/forgot_password_screen.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/screens/splash_screen.dart';
-import 'ui/screens/auth/reset_password_screen.dart';
-import 'ui/screens/auth/direct_reset_password_screen.dart';
+import 'ui/screens/profile_screen.dart';
+import 'ui/screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,7 +59,6 @@ class _ThreadFlowAppState extends ConsumerState<ThreadFlowApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch auth state
     final authState = ref.watch(authControllerProvider);
     final currentUser = authState.user;
 
@@ -81,9 +80,8 @@ class _ThreadFlowAppState extends ConsumerState<ThreadFlowApp> {
         '/signup': (context) => const SignUpScreen(),
         '/home': (context) => const HomeScreen(),
         // '/forgot-password': (context) => const ForgotPasswordScreen(),
-      //  '/reset-password': (context) => ResetPasswordScreen(email: ''),
-       '/reset-password-direct': (context) => const DirectResetPasswordScreen(),
-
+        '/profile': (context) => const ProfileScreen(),
+        '/settings': (context) => const SettingsScreen(),
       },
       
       onUnknownRoute: (settings) {

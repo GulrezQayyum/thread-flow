@@ -38,17 +38,9 @@ class AuthState {
   final bool isLoading;
   final String? error;
 
-  AuthState({
-    this.user,
-    this.isLoading = false,
-    this.error,
-  });
+  AuthState({this.user, this.isLoading = false, this.error});
 
-  AuthState copyWith({
-    UserModel? user,
-    bool? isLoading,
-    String? error,
-  }) {
+  AuthState copyWith({UserModel? user, bool? isLoading, String? error}) {
     return AuthState(
       user: user ?? this.user,
       isLoading: isLoading ?? this.isLoading,
@@ -63,17 +55,12 @@ class AuthController extends Notifier<AuthState> {
     return AuthState();
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  // Sign In
+  Future<void> signIn({required String email, required String password}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final authService = ref.read(authServiceProvider);
-      final user = await authService.signIn(
-        email: email,
-        password: password,
-      );
+      final user = await authService.signIn(email: email, password: password);
       state = state.copyWith(user: user, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -81,6 +68,7 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
+  // Sign Up
   Future<void> signUp({
     required String email,
     required String password,
@@ -101,12 +89,49 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
+  // Sign Out
   Future<void> signOut() async {
     state = state.copyWith(isLoading: true);
     try {
       final authService = ref.read(authServiceProvider);
       await authService.signOut();
       state = AuthState();
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      rethrow;
+    }
+  }
+
+  // ==================== PASSWORD RESET METHODS ====================
+
+  /// Send password reset email - FIXED: Now inside AuthController
+  // Future<void> sendPasswordResetEmail({
+  //   required String email,
+  // }) async {
+  //   state = state.copyWith(isLoading: true, error: null);
+  //   try {
+  //     final authService = ref.read(authServiceProvider);
+  //     await authService.sendPasswordResetEmail(email: email);
+  //     state = state.copyWith(isLoading: false);
+  //   } catch (e) {
+  //     state = state.copyWith(isLoading: false, error: e.toString());
+  //     rethrow;
+  //   }
+  // }
+
+  /// Reset password directly (for authenticated users)
+  Future<void> resetPasswordDirectly({
+    required String email,
+    required String newPassword,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.resetPasswordDirectly(
+        email: email,
+        newPassword: newPassword,
+      );
+      state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
       rethrow;
