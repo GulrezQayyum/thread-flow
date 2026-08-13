@@ -8,11 +8,11 @@ import 'ui/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'ui/screens/auth/login_screen.dart';
 import 'ui/screens/auth/signup_screen.dart';
-import 'ui/screens/auth/forgot_password_screen.dart';
+import 'ui/screens/auth/direct_reset_password_screen.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/screens/splash_screen.dart';
 import 'ui/screens/profile_screen.dart';
-import 'ui/screens/settings_screen.dart';
+import 'ui/screens/settings_screen.dart'; // This imports themeModeProvider
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,25 +61,28 @@ class _ThreadFlowAppState extends ConsumerState<ThreadFlowApp> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
     final currentUser = authState.user;
+    
+    // Watch theme mode from settings
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
       title: 'ThreadFlow',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      
+      themeMode: themeMode,
+
       home: _showSplash
           ? const SplashScreen()
           : currentUser != null
               ? const HomeScreen()
               : const LoginScreen(),
       
-      routes: {
+     routes: {
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignUpScreen(),
         '/home': (context) => const HomeScreen(),
-        // '/forgot-password': (context) => const ForgotPasswordScreen(),
+        '/reset-password': (context) => const DirectResetPasswordScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/settings': (context) => const SettingsScreen(),
       },

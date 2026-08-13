@@ -1,14 +1,29 @@
-// lib/ui/screens/settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 
+// Modern Riverpod Notifier for Theme Mode
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() => ThemeMode.system;
+
+  void setThemeMode(ThemeMode mode) {
+    state = mode;
+  }
+}
+
+final themeModeProvider =
+    NotifierProvider<ThemeModeNotifier, ThemeMode>(() {
+  return ThemeModeNotifier();
+});
+
 class SettingsScreen extends HookConsumerWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDarkMode = useState(Theme.of(context).brightness == Brightness.dark);
+    final themeMode = ref.watch(themeModeProvider);
+    final isDarkMode = themeMode == ThemeMode.dark;
     final notificationsEnabled = useState(true);
 
     return Scaffold(
@@ -18,16 +33,25 @@ class SettingsScreen extends HookConsumerWidget {
       ),
       body: ListView(
         children: [
+          // Display section
           _buildSectionHeader(context, 'Display'),
           _buildSwitchTile(
             context,
             icon: Icons.dark_mode,
             title: 'Dark Mode',
             subtitle: 'Enable dark theme',
-            value: isDarkMode.value,
-            onChanged: (value) => isDarkMode.value = value,
+            value: isDarkMode,
+            onChanged: (value) {
+              ref.read(themeModeProvider.notifier).setThemeMode(
+                    value ? ThemeMode.dark : ThemeMode.light,
+                  );
+            },
           ),
 
+          // Theme Selector
+          _buildThemeSelector(context, ref),
+
+          // Notifications section
           _buildSectionHeader(context, 'Notifications'),
           _buildSwitchTile(
             context,
@@ -38,6 +62,7 @@ class SettingsScreen extends HookConsumerWidget {
             onChanged: (value) => notificationsEnabled.value = value,
           ),
 
+          // Data & Storage section
           _buildSectionHeader(context, 'Data & Storage'),
           _buildSimpleTile(
             context,
@@ -53,6 +78,7 @@ class SettingsScreen extends HookConsumerWidget {
             onTap: () => _showClearCacheDialog(context),
           ),
 
+          // About section
           _buildSectionHeader(context, 'About'),
           _buildSimpleTile(
             context,
@@ -71,6 +97,81 @@ class SettingsScreen extends HookConsumerWidget {
             icon: Icons.description,
             title: 'Privacy Policy',
             subtitle: 'Read our privacy policy',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeSelector(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+    
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        leading: const Icon(Icons.brightness_4),
+        title: const Text('Theme Mode'),
+        subtitle: Text(_getThemeLabel(themeMode)),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => _showThemeDialog(context, ref),
+      ),
+    );
+  }
+
+  String _getThemeLabel(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return 'Light';
+      case ThemeMode.dark:
+        return 'Dark';
+      case ThemeMode.system:
+        return 'System Default';
+    }
+  }
+
+  void _showThemeDialog(BuildContext context, WidgetRef ref) {
+    final currentMode = ref.read(themeModeProvider);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Theme'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<ThemeMode>(
+              title: const Text('Light'),
+              value: ThemeMode.light,
+              groupValue: currentMode,
+              onChanged: (value) {
+                ref.read(themeModeProvider.notifier).setThemeMode(value!);
+                Navigator.pop(context);
+              },
+            ),
+            RadioListTile<ThemeMode>(
+              title: const Text('Dark'),
+              value: ThemeMode.dark,
+              groupValue: currentMode,
+              onChanged: (value) {
+                ref.read(themeModeProvider.notifier).setThemeMode(value!);
+                Navigator.pop(context);
+              },
+            ),
+            RadioListTile<ThemeMode>(
+              title: const Text('System Default'),
+              value: ThemeMode.system,
+              groupValue: currentMode,
+              onChanged: (value) {
+                ref.read(themeModeProvider.notifier).setThemeMode(value!);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
         ],
       ),

@@ -1,3 +1,4 @@
+// lib/widgets/message_input.dart
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -14,6 +15,7 @@ class MessageInput extends HookConsumerWidget {
   final String? selectedThreadId;
   final bool isLoading;
   final bool isUploadingMedia;
+  final Function(String)? onTextChanged; // ADD THIS
 
   const MessageInput({
     Key? key,
@@ -26,6 +28,7 @@ class MessageInput extends HookConsumerWidget {
     this.selectedThreadId,
     this.isLoading = false,
     this.isUploadingMedia = false,
+    this.onTextChanged, // ADD THIS
   }) : super(key: key);
 
   @override
@@ -138,12 +141,13 @@ class MessageInput extends HookConsumerWidget {
                 enabled: !isLoading && !isUploadingMedia,
               ),
               const SizedBox(width: 4),
-              // Text input
+              // Text input with onChanged handler
               Expanded(
                 child: TextField(
                   controller: controller,
                   focusNode: focusNode,
                   maxLines: null,
+                  onChanged: onTextChanged, // ADD THIS - handles typing for typing indicator
                   decoration: InputDecoration(
                     hintText: selectedThreadId != null 
                         ? 'Reply in thread...' 

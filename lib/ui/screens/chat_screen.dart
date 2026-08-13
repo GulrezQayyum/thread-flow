@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'dart:async';
 import 'dart:io';
 import '../../models/chat_model.dart';
 import '../../models/user_model.dart';
@@ -10,6 +11,7 @@ import '../../providers/message_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/storage_provider.dart';
 import '../../providers/ai_provider.dart';
+import '../../providers/typing_provider.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_input.dart';
 import '../widgets/chat_info_sheet.dart';
@@ -17,12 +19,17 @@ import '../widgets/thread_sheet.dart';
 import '../widgets/create_thread_dialog.dart';
 import '../widgets/add_contact_dialog.dart';
 import '../widgets/summary_banner.dart';
+import '../widgets/typing_indicator.dart';
 
 class ChatScreen extends HookConsumerWidget {
   final String chatId;
   final ChatModel chat;
 
-  const ChatScreen({super.key, required this.chatId, required this.chat});
+  const ChatScreen({
+    super.key,
+    required this.chatId,
+    required this.chat,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +42,7 @@ class ChatScreen extends HookConsumerWidget {
     final selectedThreadId = useState<String?>(null);
     final searchQuery = useState<String?>(null);
     final isSearching = useState(false);
+    final currentUser = currentUserAsync.value;
 
     // Auto-scroll on new messages
     useEffect(() {
@@ -45,6 +53,45 @@ class ChatScreen extends HookConsumerWidget {
       }
       return null;
     }, [messagesAsync.value?.length]);
+
+    // Debounce typing indicator
+    final typingTimer = useRef<Timer?>(null);
+
+    void _handleTyping(String text) {
+      if (currentUser == null) return;
+
+      // Clear previous timer
+      typingTimer.value?.cancel();
+
+      if (text.isNotEmpty) {
+        // Set typing indicator
+        ref.read(setUserTypingProvider(
+          SetTypingParams(
+            chatId: chatId,
+            userId: currentUser.uid,
+            userName: currentUser.displayName ?? 'User',
+          ),
+        ));
+
+        // Clear typing after 3 seconds of inactivity
+        typingTimer.value = Timer(const Duration(seconds: 3), () {
+          ref.read(clearUserTypingProvider(
+            ClearTypingParams(
+              chatId: chatId,
+              userId: currentUser.uid,
+            ),
+          ));
+        });
+      } else {
+        // Clear typing when text is empty
+        ref.read(clearUserTypingProvider(
+          ClearTypingParams(
+            chatId: chatId,
+            userId: currentUser.uid,
+          ),
+        ));
+      }
+    }
 
     return Scaffold(
       appBar: _buildAppBar(
@@ -70,6 +117,14 @@ class ChatScreen extends HookConsumerWidget {
               return const SizedBox.shrink();
             },
           ),
+
+          // Typing Indicator
+          if (currentUser != null)
+            TypingIndicator(
+              chatId: chatId,
+              currentUserId: currentUser.uid,
+              currentUserName: currentUser.displayName ?? 'User',
+            ),
 
           // Messages list
           Expanded(
@@ -144,13 +199,24 @@ class ChatScreen extends HookConsumerWidget {
             ),
           ),
 
-          // Message input
+          // Message input with typing support
           MessageInput(
             controller: messageInputController,
             isLoading: isSending.value,
             isUploadingMedia: isUploadingMedia.value,
             onSend: (text) async {
               if (text.trim().isEmpty) return;
+
+              // Clear typing before sending
+              if (currentUser != null) {
+                ref.read(clearUserTypingProvider(
+                  ClearTypingParams(
+                    chatId: chatId,
+                    userId: currentUser.uid,
+                  ),
+                ));
+              }
+
               await _sendMessage(
                 context,
                 ref,
@@ -162,6 +228,7 @@ class ChatScreen extends HookConsumerWidget {
               messageInputController.clear();
               _scrollToBottom(scrollController);
             },
+            onTextChanged: _handleTyping,
             onMediaPicked: (File? media) async {
               if (media == null) return;
               await _uploadAndSendMedia(
@@ -740,19 +807,19 @@ class ChatScreen extends HookConsumerWidget {
 
   // ==================== CHAT INFO ====================
 
- void _showChatInfo(BuildContext context) {
-  showModalBottomSheet(
-    context: context,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    isScrollControlled: true,
-    builder: (context) => Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+  void _showChatInfo(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      child: ChatInfoSheet(chat: chat),
-    ),
-  );
-}
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: ChatInfoSheet(chat: chat),
+      ),
+    );
+  }
 }
